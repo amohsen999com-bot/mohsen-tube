@@ -222,8 +222,10 @@ function main() {
       ch TEXT NOT NULL,
       q TEXT NOT NULL,
       answers_json TEXT NOT NULL,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      voter TEXT NOT NULL DEFAULT ''
     );
+    CREATE INDEX labels_vote_idx ON labels (vid, ch, q, voter);
 
     CREATE TABLE rooms (
       code TEXT PRIMARY KEY,
@@ -231,7 +233,13 @@ function main() {
       t REAL NOT NULL DEFAULT 0,
       playing INTEGER NOT NULL DEFAULT 0,
       by_user TEXT NOT NULL,
-      updated_at REAL NOT NULL
+      updated_at REAL NOT NULL,
+      token_hash TEXT NOT NULL DEFAULT ''
+    );
+
+    CREATE TABLE related (
+      vid TEXT PRIMARY KEY,
+      ids_json TEXT NOT NULL
     );
   `);
 
@@ -572,6 +580,22 @@ function main() {
   console.log(
     `Seeded ${commentCount} comment files, ${infoCount} video info files, ${transcriptCount} transcripts.`
   );
+  // "Watched together" graph (empty lists are fine: the app falls back to content-based related videos)
+  const rawRelated = readJson<Record<string, string[]>>("site/related.json", {});
+  const knownIds = new Set((db.prepare(`SELECT id FROM videos`).all() as Array<{ id: string }>).map((r) => r.id));
+  const insertRelated = db.prepare(`INSERT OR REPLACE INTO related (vid, ids_json) VALUES (?, ?)`);
+  let relatedCount = 0;
+  db.exec("BEGIN");
+  for (const [vid, list] of Object.entries(rawRelated)) {
+    if (!knownIds.has(vid) || !Array.isArray(list)) continue;
+    const ids = list.filter((x) => typeof x === "string" && knownIds.has(x)).slice(0, 12);
+    if (ids.length) {
+      insertRelated.run(vid, JSON.stringify(ids));
+      relatedCount++;
+    }
+  }
+  db.exec("COMMIT");
+  console.log(`Seeded related lists for ${relatedCount} videos.`);
   db.close();
   console.log(`Database ready at ${dbPath}`);
 }

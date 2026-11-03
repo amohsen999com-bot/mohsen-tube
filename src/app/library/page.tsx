@@ -21,6 +21,7 @@ import {
 } from "@/lib/client/prayer";
 import { formatDuration } from "@/lib/arabic";
 import { usePlayer } from "@/components/player/PlayerContext";
+import { AccountSection } from "@/components/library/AccountSection";
 
 export default function LibraryPage() {
   const { showToast } = usePlayer();
@@ -195,6 +196,9 @@ export default function LibraryPage() {
           </div>
         )}
       </section>
+
+      {/* Account: cloud sync + backup */}
+      <AccountSection />
 
       {/* Daily Wird Settings */}
       <section className="settings">

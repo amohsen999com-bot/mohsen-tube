@@ -6,6 +6,7 @@ import { ChannelInfo, SeriesItem, VideoItem } from "@/lib/types";
 import { VideoCard } from "@/components/video/VideoCard";
 import { ClientStore } from "@/lib/client/store";
 import { usePlayer } from "@/components/player/PlayerContext";
+import { rememberSeries } from "@/lib/client/related";
 
 export default function ChannelPage({
   params,
@@ -152,7 +153,7 @@ export default function ChannelPage({
               </div>
               {s.v[0] && (
                 <div style={{ marginTop: 10 }}>
-                  <Link className="btn gold" href={`/watch/${s.v[0]}`}>
+                  <Link className="btn gold" href={`/watch/${s.v[0]}`} onClick={() => rememberSeries(s.id)}>
                     ▶ ابدأ السلسلة
                   </Link>
                 </div>

@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
+import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import type {
   ChannelInfo,
@@ -32,7 +33,24 @@ export function getDb(): DatabaseSync {
   }
   _db = new DatabaseSync(dbPath);
   _db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
+  ensureSchema(_db);
   return _db;
+}
+
+/** Additive migrations for databases seeded before these columns/tables existed. */
+function ensureSchema(db: DatabaseSync): void {
+  const cols = (table: string) =>
+    (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name);
+  if (!cols("rooms").includes("token_hash")) {
+    db.exec(`ALTER TABLE rooms ADD COLUMN token_hash TEXT NOT NULL DEFAULT ''`);
+  }
+  if (!cols("labels").includes("voter")) {
+    db.exec(`ALTER TABLE labels ADD COLUMN voter TEXT NOT NULL DEFAULT ''`);
+  }
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS labels_vote_idx ON labels (vid, ch, q, voter);
+    CREATE TABLE IF NOT EXISTS related (vid TEXT PRIMARY KEY, ids_json TEXT NOT NULL);
+  `);
 }
 
 interface RawVideoRow {
@@ -126,7 +144,7 @@ export function getFeedVideos(options: {
   const offset = Math.max(options.offset || 0, 0);
 
   if (options.category === "fun") {
-    const whereClause = `is_curated = 1 AND g IN ('اصنعها بنفسك', 'رياضة') OR (is_curated = 1 AND g = 'بودكاست' AND tp != 'بيزنس')`;
+    const whereClause = `is_curated = 1 AND (g IN ('اصنعها بنفسك', 'رياضة') OR (g = 'بودكاست' AND tp != 'بيزنس'))`;
     const totalRow = db
       .prepare(`SELECT COUNT(*) as cnt FROM videos WHERE ${whereClause}`)
       .get() as { cnt: number };
@@ -191,6 +209,27 @@ export function getVideosByIds(ids: string[]): VideoItem[] {
   return cleanIds.map((id) => byId.get(id)).filter((v): v is VideoItem => !!v);
 }
 
+/** "Watched together" graph: YouTube's related list for each given video (from site/related.json). */
+export function getRelatedGraph(ids: string[]): Record<string, string[]> {
+  const cleanIds = ids.slice(0, 60).filter((id) => /^[A-Za-z0-9_-]{6,16}$/.test(id));
+  if (!cleanIds.length) return {};
+  const db = getDb();
+  const rows = db
+    .prepare(`SELECT vid, ids_json FROM related WHERE vid IN (${cleanIds.map(() => "?").join(",")})`)
+    .all(...cleanIds) as Array<{ vid: string; ids_json: string }>;
+  const out: Record<string, string[]> = {};
+  for (const r of rows) {
+    try {
+      const list: unknown = JSON.parse(r.ids_json);
+      if (Array.isArray(list)) out[r.vid] = list.filter((x): x is string => typeof x === "string").slice(0, 12);
+    } catch {}
+  }
+  // No YouTube list for a video (most of the catalog): fall back to its content-based related list
+  const missing = cleanIds.filter((id) => !out[id]);
+  for (const v of getVideosByIds(missing)) out[v.id] = computeRelated(v, 12).map((x) => x.id);
+  return out;
+}
+
 export function getVideosByChannels(channelNames: string[], limit = 200): VideoItem[] {
   if (!channelNames.length) return [];
   const db = getDb();
@@ -208,7 +247,39 @@ export function getVideosByChannels(channelNames: string[], limit = 200): VideoI
   return rows.map(mapRowToVideo);
 }
 
-export function getVideoDetail(videoId: string): VideoDetailResponse | null {
+/** Content-based related videos (same channel/topic + title-word overlap), via indexed lookups. */
+function computeRelated(video: VideoItem, limit: number): VideoItem[] {
+  const db = getDb();
+  const relatedCandidates = db
+    .prepare(
+      `SELECT ${VIDEO_COLS}
+       FROM videos
+       WHERE is_curated = 1 AND id != ? AND (c = ? OR tp = ?)
+       ORDER BY (CASE WHEN c = ? THEN 1.5 ELSE 0 END + CASE WHEN tp = ? THEN 1.2 ELSE 0 END + COALESCE(s, r)) DESC
+       LIMIT 60`
+    )
+    .all(video.id, video.c, video.tp, video.c, video.tp) as unknown as RawVideoRow[];
+  const titleWords = new Set(
+    normArabic(video.t)
+      .split(/\s+/)
+      .filter((w) => w.length > 3)
+  );
+  return relatedCandidates
+    .map((cand) => {
+      const item = mapRowToVideo(cand);
+      const overlap = normArabic(item.t)
+        .split(/\s+/)
+        .filter((w) => titleWords.has(w)).length;
+      const score =
+        (item.c === video.c ? 2.0 : 0) + (item.tp === video.tp ? 1.5 : 0) + overlap * 1.1 + (item.s ?? item.r);
+      return { score, item };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((x) => x.item);
+}
+
+export function getVideoDetail(videoId: string, preferredSeries?: number): VideoDetailResponse | null {
   if (!/^[A-Za-z0-9_-]{6,16}$/.test(videoId)) return null;
   const db = getDb();
   const row = db
@@ -243,10 +314,18 @@ export function getVideoDetail(videoId: string): VideoDetailResponse | null {
     : null;
 
   let series: VideoDetailResponse["series"] = null;
-  if (video.pl !== undefined && video.pl !== null) {
-    const serRow = db
-      .prepare(`SELECT id, t, videos_json FROM series WHERE id = ?`)
-      .get(video.pl) as { id: number; t: string; videos_json: string } | undefined;
+  // The series the viewer actually opened wins (a video can sit in several playlists), else its main one
+  const seriesRow = (sid: number) =>
+    db.prepare(`SELECT id, t, videos_json FROM series WHERE id = ?`).get(sid) as
+      | { id: number; t: string; videos_json: string }
+      | undefined;
+  let serRow =
+    preferredSeries !== undefined && Number.isInteger(preferredSeries) && preferredSeries >= 0
+      ? seriesRow(preferredSeries)
+      : undefined;
+  if (serRow && !(JSON.parse(serRow.videos_json) as string[]).includes(video.id)) serRow = undefined;
+  if (!serRow && video.pl !== undefined && video.pl !== null) serRow = seriesRow(video.pl);
+  {
     if (serRow) {
       const vidIds = JSON.parse(serRow.videos_json) as string[];
       const epVideos = getVideosByIds(vidIds);
@@ -264,38 +343,7 @@ export function getVideoDetail(videoId: string): VideoDetailResponse | null {
     }
   }
 
-  // Compute related videos server-side using indexed lookups (channel + topic + title word overlap)
-  const relatedCandidates = db
-    .prepare(
-      `SELECT ${VIDEO_COLS}
-       FROM videos
-       WHERE is_curated = 1 AND id != ? AND (c = ? OR tp = ?)
-       ORDER BY (CASE WHEN c = ? THEN 1.5 ELSE 0 END + CASE WHEN tp = ? THEN 1.2 ELSE 0 END + COALESCE(s, r)) DESC
-       LIMIT 60`
-    )
-    .all(video.id, video.c, video.tp, video.c, video.tp) as unknown as RawVideoRow[];
-
-  const titleWords = new Set(
-    normArabic(video.t)
-      .split(/\s+/)
-      .filter((w) => w.length > 3)
-  );
-  const scoredRelated = relatedCandidates
-    .map((cand) => {
-      const item = mapRowToVideo(cand);
-      const overlap = normArabic(item.t)
-        .split(/\s+/)
-        .filter((w) => titleWords.has(w)).length;
-      const score =
-        (item.c === video.c ? 2.0 : 0) +
-        (item.tp === video.tp ? 1.5 : 0) +
-        overlap * 1.1 +
-        (item.s ?? item.r);
-      return { score, item };
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 20)
-    .map((x) => x.item);
+  const scoredRelated = computeRelated(video, 20);
 
   if (series?.nextVideo && !scoredRelated.some((x) => x.id === series!.nextVideo!.id)) {
     scoredRelated.unshift(series.nextVideo);
@@ -570,29 +618,81 @@ const VALID_QUESTIONS: Record<string, "video" | "channel"> = {
   similar: "channel",
 };
 
+/**
+ * The only answers each question accepts (the same chips the viewer is shown).
+ * "similar" answers must be real channel names from the catalog (checked against the DB).
+ */
+export const LABEL_ANSWERS: Record<"aud" | "trait" | "edge", ReadonlySet<string>> = {
+  aud: new Set([
+    "أي حد", "المبتدئ في الموضوع", "طالب العلم", "الشباب", "الآباء والأمهات", "المتخصص", "الأطفال", "المتزوجين",
+  ]),
+  trait: new Set(["هادي", "حماسي", "مبسّط", "عميق", "عملي"]),
+  edge: new Set([
+    "بيبسّط الصعب", "أمثلة من الواقع", "دليل وتأصيل", "بيحرّك القلب", "بيجاوب على أسئلة الناس",
+    "تطبيق خطوة بخطوة", "مختصر ومركّز", "شرح عميق",
+  ]),
+};
+const MAX_VOTES_PER_TARGET = 500; // per (video or channel, question)
+
+/** Stable, non-reversible voter fingerprint (e.g. from the client IP) so one person counts once per question. */
+export function voterId(raw: string): string {
+  return crypto.createHash("sha256").update("mohsen-label:" + raw).digest("hex").slice(0, 24);
+}
+
 export function saveViewerLabel(input: {
   vid: string;
-  ch: string;
+  ch?: string;
   q: string;
   a: string[];
+  voter?: string;
 }): boolean {
-  if (!VALID_QUESTIONS[input.q]) return false;
+  const kind = VALID_QUESTIONS[input.q];
+  if (!kind) return false;
   if (!/^[A-Za-z0-9_-]{6,16}$/.test(input.vid)) return false;
-  const answers = (input.a || [])
-    .map((x) => String(x).trim().slice(0, 60))
-    .filter(Boolean)
-    .slice(0, 3);
-  if (!answers.length) return false;
   const db = getDb();
+  const video = db.prepare(`SELECT c FROM videos WHERE id = ?`).get(input.vid) as { c: string } | undefined;
+  if (!video) return false;
+  // The channel always comes from the catalog, never from the caller
+  const ch = video.c;
+
+  const raw = [...new Set((input.a || []).map((x) => String(x).trim()))].filter(Boolean).slice(0, 3);
+  let answers: string[];
+  if (input.q === "similar") {
+    const known = new Set(
+      (raw.length
+        ? (db
+            .prepare(`SELECT name FROM channels WHERE name IN (${raw.map(() => "?").join(",")})`)
+            .all(...raw) as Array<{ name: string }>)
+        : []
+      ).map((r) => r.name)
+    );
+    answers = raw.filter((x) => known.has(x) && x !== ch);
+  } else {
+    const allowed = LABEL_ANSWERS[input.q as "aud" | "trait" | "edge"];
+    answers = raw.filter((x) => allowed.has(x));
+  }
+  if (!answers.length) return false;
+
+  // Video questions are keyed by video, channel questions by channel (so one vote per channel, not per video)
+  const keyVid = kind === "video" ? input.vid : "";
+  const keyCh = kind === "video" ? "" : ch;
+  const voter = input.voter || "";
+  if (voter) {
+    const dup = db
+      .prepare(`SELECT 1 FROM labels WHERE vid = ? AND ch = ? AND q = ? AND voter = ? LIMIT 1`)
+      .get(keyVid, keyCh, input.q, voter);
+    if (dup) return false;
+  }
+  const count = (
+    db
+      .prepare(`SELECT COUNT(*) AS n FROM labels WHERE vid = ? AND ch = ? AND q = ?`)
+      .get(keyVid, keyCh, input.q) as { n: number }
+  ).n;
+  if (count >= MAX_VOTES_PER_TARGET) return false;
+
   db.prepare(
-    `INSERT INTO labels (vid, ch, q, answers_json, created_at) VALUES (?, ?, ?, ?, ?)`
-  ).run(
-    input.vid.slice(0, 20),
-    String(input.ch || "").slice(0, 120),
-    input.q,
-    JSON.stringify(answers),
-    Math.floor(Date.now() / 1000)
-  );
+    `INSERT INTO labels (vid, ch, q, answers_json, created_at, voter) VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(keyVid, keyCh, input.q, JSON.stringify(answers), Math.floor(Date.now() / 1000), voter);
   return true;
 }
 
@@ -613,29 +713,61 @@ export function getAggregatedLabels(): LabelsAggregate {
     if (!kind) continue;
     const bucket = kind === "video" ? out.v : out.c;
     const key = kind === "video" ? r.vid : r.ch;
-    const qMap = ((bucket[key] = bucket[key] || {})[r.q] =
-      bucket[key][r.q] || {});
-    const answers = JSON.parse(r.answers_json) as string[];
+    if (!key) continue;
+    let answers: unknown;
+    try {
+      answers = JSON.parse(r.answers_json);
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(answers)) continue;
+    const qMap = ((bucket[key] = bucket[key] || {})[r.q] = bucket[key][r.q] || {});
     for (const ans of answers) {
+      if (typeof ans !== "string") continue;
+      // Rows saved before the allowlist existed only count if the answer is still valid
+      if (r.q !== "similar" && !LABEL_ANSWERS[r.q as "aud" | "trait" | "edge"].has(ans)) continue;
       qMap[ans] = (qMap[ans] || 0) + 1;
     }
   }
   return out;
 }
 
-export function getRoom(code: string): RoomState | null {
-  const cleanCode = String(code || "")
+// ---------- Watch-together rooms ----------
+// Codes and tokens come from the server's CSPRNG. Only a token holder (the creator, or someone who joined
+// with the code) can change the room. The creator token is stored only as a SHA-256 hash; member tokens
+// are an HMAC of the room code keyed by that hash, so they never need to be stored.
+const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I
+const ROOM_CODE_LEN = 8; // 32^8 ≈ 1.1e12 codes
+const ROOM_TTL_SEC = 6 * 3600;
+
+const cleanRoomCode = (code: string) =>
+  String(code || "")
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "")
     .slice(0, 12);
-  if (!cleanCode) return null;
+const hashToken = (token: string) => crypto.createHash("sha256").update(String(token)).digest("hex");
+const memberToken = (code: string, tokenHash: string) =>
+  "m." + crypto.createHmac("sha256", tokenHash).update("member:" + code).digest("base64url");
+
+function safeEqual(a: string, b: string): boolean {
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+}
+
+function newRoomCode(): string {
+  const bytes = crypto.randomBytes(ROOM_CODE_LEN);
+  let out = "";
+  for (let i = 0; i < ROOM_CODE_LEN; i++) out += ROOM_ALPHABET[bytes[i] % ROOM_ALPHABET.length];
+  return out;
+}
+
+function roomRow(cleanCode: string) {
+  if (!cleanCode) return undefined;
   const db = getDb();
-  const now = Date.now() / 1000;
-  db.prepare(`DELETE FROM rooms WHERE ? - updated_at > 21600`).run(now);
-  const row = db
-    .prepare(
-      `SELECT code, vid, t, playing, by_user, updated_at FROM rooms WHERE code = ?`
-    )
+  db.prepare(`DELETE FROM rooms WHERE ? - updated_at > ?`).run(Date.now() / 1000, ROOM_TTL_SEC);
+  return db
+    .prepare(`SELECT code, vid, t, playing, by_user, updated_at, token_hash FROM rooms WHERE code = ?`)
     .get(cleanCode) as
     | {
         code: string;
@@ -644,8 +776,13 @@ export function getRoom(code: string): RoomState | null {
         playing: number;
         by_user: string;
         updated_at: number;
+        token_hash: string;
       }
     | undefined;
+}
+
+export function getRoom(code: string): RoomState | null {
+  const row = roomRow(cleanRoomCode(code));
   if (!row) return null;
   return {
     code: row.code,
@@ -654,41 +791,68 @@ export function getRoom(code: string): RoomState | null {
     playing: !!row.playing,
     by: row.by_user,
     ts: row.updated_at,
-    now,
+    now: Date.now() / 1000,
   };
 }
 
-export function upsertRoom(input: {
+function cleanRoomInput(input: { vid: string; t: number; by: string }) {
+  const vid = String(input.vid || "").trim();
+  const by = String(input.by || "")
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .slice(0, 20);
+  if (!/^[A-Za-z0-9_-]{6,16}$/.test(vid) || !by) return null;
+  if (!getDb().prepare(`SELECT 1 FROM videos WHERE id = ?`).get(vid)) return null;
+  return { vid, by, t: Math.max(0, Math.min(Number(input.t) || 0, 86400)) };
+}
+
+/** Creates a room with a server-generated code; returns the room plus the creator's secret token. */
+export function createRoom(input: {
+  vid: string;
+  t: number;
+  playing: boolean;
+  by: string;
+}): { room: RoomState; token: string } | null {
+  const clean = cleanRoomInput(input);
+  if (!clean) return null;
+  const token = crypto.randomBytes(24).toString("base64url");
+  let code = newRoomCode();
+  for (let i = 0; i < 5 && roomRow(code); i++) code = newRoomCode();
+  getDb()
+    .prepare(
+      `INSERT INTO rooms (code, vid, t, playing, by_user, updated_at, token_hash) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(code, clean.vid, clean.t, input.playing ? 1 : 0, clean.by, Date.now() / 1000, hashToken(token));
+  const room = getRoom(code);
+  return room ? { room, token } : null;
+}
+
+/** Joining with the code hands out a member token, so the friend can also play/pause/seek. */
+export function joinRoom(code: string): { room: RoomState; token: string } | null {
+  const row = roomRow(cleanRoomCode(code));
+  if (!row || !row.token_hash) return null;
+  const room = getRoom(row.code);
+  return room ? { room, token: memberToken(row.code, row.token_hash) } : null;
+}
+
+/** Updates a room; requires the creator token or a member token. */
+export function updateRoom(input: {
   code: string;
+  token: string;
   vid: string;
   t: number;
   playing: boolean;
   by: string;
 }): RoomState | null {
-  const cleanCode = String(input.code || "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .slice(0, 12);
-  const cleanVid = String(input.vid || "").trim();
-  const cleanBy = String(input.by || "")
-    .replace(/[^a-zA-Z0-9_-]/g, "")
-    .slice(0, 20);
-  if (!cleanCode || !/^[A-Za-z0-9_-]{6,16}$/.test(cleanVid) || !cleanBy) {
+  const row = roomRow(cleanRoomCode(input.code));
+  if (!row || !row.token_hash) return null;
+  const token = String(input.token || "");
+  if (!safeEqual(hashToken(token), row.token_hash) && !safeEqual(token, memberToken(row.code, row.token_hash))) {
     return null;
   }
-  const db = getDb();
-  // Verify the video exists in our catalog
-  const exists = db
-    .prepare(`SELECT 1 FROM videos WHERE id = ?`)
-    .get(cleanVid);
-  if (!exists) return null;
-
-  const now = Date.now() / 1000;
-  const safeTime = Math.max(0, Math.min(Number(input.t) || 0, 86400));
-  db.prepare(
-    `INSERT OR REPLACE INTO rooms (code, vid, t, playing, by_user, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(cleanCode, cleanVid, safeTime, input.playing ? 1 : 0, cleanBy, now);
-
-  return getRoom(cleanCode);
+  const clean = cleanRoomInput(input);
+  if (!clean) return null;
+  getDb()
+    .prepare(`UPDATE rooms SET vid = ?, t = ?, playing = ?, by_user = ?, updated_at = ? WHERE code = ?`)
+    .run(clean.vid, clean.t, input.playing ? 1 : 0, clean.by, Date.now() / 1000, row.code);
+  return getRoom(row.code);
 }

@@ -3,7 +3,7 @@
 import React, { use, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { VideoDetailResponse } from "@/lib/types";
+import { VideoDetailResponse, VideoItem } from "@/lib/types";
 import {
   formatDuration,
   formatRelativeArabicDate,
@@ -14,6 +14,7 @@ import { VideoCard } from "@/components/video/VideoCard";
 import { QuoteModal } from "@/components/modals/QuoteModal";
 import { ClientStore, subscribeStore } from "@/lib/client/store";
 import { AlgoEngine } from "@/lib/client/algo";
+import { activeSeries, composeRelated, loadFeedPool, rememberSeries } from "@/lib/client/related";
 
 const DUAS = [
   "جزاك الله خيرًا",
@@ -46,6 +47,7 @@ export default function WatchPage({
     seekTo,
     setChapters,
     setClipRange,
+    setUpNext,
     currentTime,
     showToast,
     createWatchRoom,
@@ -72,6 +74,8 @@ export default function WatchPage({
   const [transcriptQuery, setTranscriptQuery] = useState("");
   const [roomModalCode, setRoomModalCode] = useState<string | null>(null);
   const [askSubmitted, setAskSubmitted] = useState(false);
+  const [feedPool, setFeedPool] = useState<VideoItem[]>([]);
+  const seriesListRef = useRef<HTMLOListElement | null>(null);
   const [, setStoreTick] = useState(0);
 
   const playerSlotRef = useRef<HTMLDivElement | null>(null);
@@ -88,22 +92,19 @@ export default function WatchPage({
     }
   }, [searchParams, joinWatchRoom]);
 
-  // Apply clip start/end if `?s=...&e=...` is in URL
   useEffect(() => {
-    const s = Number(searchParams.get("s"));
-    const e = Number(searchParams.get("e"));
-    if (!Number.isNaN(s) && !Number.isNaN(e) && e > s && s >= 0) {
-      setClipStart(s);
-      setClipEnd(e);
-      setClipRange([s, e]);
-      seekTo(s);
-    }
-  }, [searchParams, seekTo, setClipRange]);
+    loadFeedPool().then(setFeedPool);
+  }, []);
 
+  // ?s= (timestamp links) and ?s=&e= (saved clips) are read here, in the same effect that starts the video,
+  // so the start position goes straight into the player instead of racing it.
+  const startParam = searchParams.get("s");
+  const endParam = searchParams.get("e");
   useEffect(() => {
     let active = true;
     setLoading(true);
-    fetch(`/api/videos/${encodeURIComponent(id)}`)
+    const pl = activeSeries();
+    fetch(`/api/videos/${encodeURIComponent(id)}${pl !== null ? `?pl=${pl}` : ""}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data: VideoDetailResponse | null) => {
         if (!active) return;
@@ -112,10 +113,20 @@ export default function WatchPage({
           ClientStore.pushHistory(data.video.id);
           setIsLiked(ClientStore.hasInList("liked", data.video.id));
           setIsSubscribed(ClientStore.isSubscribed(data.video.c));
-          playVideo(data.video);
+          const s = startParam !== null ? Number(startParam) : NaN;
+          const e = endParam !== null ? Number(endParam) : NaN;
+          const hasStart = Number.isFinite(s) && s >= 0;
+          const hasClip = hasStart && Number.isFinite(e) && e > s;
+          playVideo(data.video, hasStart ? Math.floor(s) : undefined);
           setChapters(data.chapters || []);
-          setClipStart(0);
-          setClipEnd(Math.min(data.video.d || 60, 60));
+          if (hasClip) {
+            setClipStart(Math.floor(s));
+            setClipEnd(Math.floor(e));
+            setClipRange([Math.floor(s), Math.floor(e)]);
+          } else {
+            setClipStart(0);
+            setClipEnd(Math.min(data.video.d || 60, 60));
+          }
         }
       })
       .catch(() => {})
@@ -125,7 +136,30 @@ export default function WatchPage({
     return () => {
       active = false;
     };
-  }, [id, playVideo, setChapters]);
+  }, [id, startParam, endParam, playVideo, setChapters, setClipRange]);
+
+  // Suggestions: max 3 of the same kind, the rest from the main feed engine
+  const relatedList = useMemo(
+    () =>
+      detail?.video
+        ? composeRelated(detail.video, detail.related || [], detail.series?.nextVideo || null, feedPool)
+        : [],
+    [detail, feedPool]
+  );
+
+  // What plays the moment this video ends: the next episode, else the first suggestion
+  useEffect(() => {
+    if (!detail?.video) return;
+    setUpNext(detail.series?.nextVideo || relatedList[0] || null);
+  }, [detail, relatedList, setUpNext]);
+
+  // Keep the series we're in as the context for the next episodes, and center the current episode
+  useEffect(() => {
+    if (detail?.series) rememberSeries(detail.series.id);
+    const list = seriesListRef.current;
+    const on = list?.querySelector<HTMLLIElement>("li.on");
+    if (list && on) list.scrollTop = on.offsetTop - list.offsetTop - list.clientHeight / 2 + on.clientHeight / 2;
+  }, [detail]);
 
   // Attach global VideoDock to `#player` slot on mount, detach to mini-player on unmount
   useEffect(() => {
@@ -472,8 +506,8 @@ export default function WatchPage({
             </div>
 
             {series?.nextVideo && (
-              <Link className="btn" href={`/watch/${series.nextVideo.id}`}>
-                الحلقة اللي بعدها ←
+              <Link className="btn" href={`/watch/${series.nextVideo.id}`} onClick={() => rememberSeries(series.id)}>
+                الحلقة اللي بعدها →
               </Link>
             )}
           </div>
@@ -547,10 +581,10 @@ export default function WatchPage({
             <summary>
               {series.title} ({seriesDoneCount} من {series.videos.length} مكتمل)
             </summary>
-            <ol>
+            <ol ref={seriesListRef}>
               {series.videos.map((ep) => (
                 <li key={ep.id} className={ep.id === video.id ? "on" : ""}>
-                  <Link href={`/watch/${ep.id}`}>
+                  <Link href={`/watch/${ep.id}`} onClick={() => rememberSeries(series.id)}>
                     {ep.t} <small className="muted">({formatDuration(ep.d)})</small>
                   </Link>
                 </li>
@@ -646,11 +680,9 @@ export default function WatchPage({
           </div>
         )}
 
-        {related
-          .filter((rv) => ClientStore.isAllowed(rv))
-          .map((rv) => (
-            <VideoCard key={rv.id} video={rv} />
-          ))}
+        {relatedList.map((rv) => (
+          <VideoCard key={rv.id} video={rv} />
+        ))}
       </div>
 
       {/* Quote Generator Modal */}

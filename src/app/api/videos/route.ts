@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { allowRequest, clientIp } from "@/lib/rate-limit";
 import {
   getAggregatedLabels,
   getCatalogSummary,
   getFeedVideos,
+  getRelatedGraph,
   getVideosByChannels,
   getVideosByIds,
 } from "@/lib/db";
@@ -15,6 +17,15 @@ export async function GET(request: NextRequest) {
       const summary = getCatalogSummary();
       const labels = getAggregatedLabels();
       return NextResponse.json({ ...summary, labels });
+    }
+
+    // "Watched together" graph for the viewer's recent history (client-side relatedScores)
+    const relatedFor = sp.get("related_for");
+    if (relatedFor !== null) {
+      if (!allowRequest("related", clientIp(request), 30)) {
+        return NextResponse.json({ error: "rate limited" }, { status: 429 });
+      }
+      return NextResponse.json({ graph: getRelatedGraph(relatedFor.split(",").map((s) => s.trim()).filter(Boolean)) });
     }
 
     const idsParam = sp.get("ids");

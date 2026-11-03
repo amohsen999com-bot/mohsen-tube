@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { VideoItem } from "@/lib/types";
 import { formatDuration, formatRelativeArabicDate } from "@/lib/arabic";
 import { ClientStore } from "@/lib/client/store";
-import { getWhyLabel } from "@/lib/client/algo";
+import { AlgoEngine, getWhyLabel } from "@/lib/client/algo";
 import { usePlayer } from "@/components/player/PlayerContext";
 
 export function VideoCard({
@@ -20,6 +20,36 @@ export function VideoCard({
   const { showToast } = usePlayer();
   const [menuOpen, setMenuOpen] = useState(false);
   const prog = ClientStore.getProgress(video.id);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const openedRef = useRef(false);
+
+  // Feed cards: shown for 1s+ and scrolled past (or left on screen when leaving the page) without opening
+  // counts as one skip, so the engine rests it and shows it less.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!showWhy || !el) return;
+    let shownAt = 0;
+    let counted = false;
+    const passed = () => {
+      if (shownAt && !counted && !openedRef.current && Date.now() - shownAt > 1000) {
+        counted = true;
+        AlgoEngine.recordSkip(video);
+      }
+      shownAt = 0;
+    };
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) shownAt = Date.now();
+        else passed();
+      },
+      { threshold: 0.6 }
+    );
+    io.observe(el);
+    return () => {
+      io.disconnect();
+      passed();
+    };
+  }, [showWhy, video]);
 
   const thumbUrl = `https://i.ytimg.com/vi/${video.id}/${
     video.hd ? "maxresdefault" : "hqdefault"
@@ -32,8 +62,8 @@ export function VideoCard({
   };
 
   return (
-    <div className="card-wrap" onMouseLeave={() => setMenuOpen(false)}>
-      <Link className="card in" href={`/watch/${video.id}`}>
+    <div className="card-wrap" ref={wrapRef} onMouseLeave={() => setMenuOpen(false)}>
+      <Link className="card in" href={`/watch/${video.id}`} onClick={() => (openedRef.current = true)}>
         <div className="thumb">
           <img
             loading="lazy"

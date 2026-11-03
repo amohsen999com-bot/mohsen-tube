@@ -8,13 +8,20 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { useRouter } from "next/navigation";
 import { ChapterItem, VideoItem } from "@/lib/types";
 import { ClientStore } from "@/lib/client/store";
+import { startSync } from "@/lib/client/sync";
 
 export type SleepOption = 15 | 30 | 60 | "end" | null;
 
 interface PlayerContextValue {
   currentVideo: VideoItem | null;
+  /** Where the current video should start (from ?s=, a clip, or resume); null = resume from saved progress. */
+  startAt: number | null;
+  /** What plays right after this video ends (series next or first suggestion); set by the watch page. */
+  upNext: VideoItem | null;
+  setUpNext: (video: VideoItem | null) => void;
   isPlaying: boolean;
   currentTime: number;
   duration: number;
@@ -57,8 +64,27 @@ interface PlayerContextValue {
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 
+const ROOM_TOKEN_PREFIX = "nt_room_token:";
+const roomTokenFor = (code: string) => {
+  try {
+    return window.sessionStorage.getItem(ROOM_TOKEN_PREFIX + code) || "";
+  } catch {
+    return "";
+  }
+};
+const saveRoomToken = (code: string, token: string) => {
+  try {
+    window.sessionStorage.setItem(ROOM_TOKEN_PREFIX + code, token);
+  } catch {}
+};
+
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [currentVideo, setCurrentVideo] = useState<VideoItem | null>(null);
+  const [startAt, setStartAt] = useState<number | null>(null);
+  const [upNext, setUpNext] = useState<VideoItem | null>(null);
+  const currentVideoRef = useRef<VideoItem | null>(null);
+  currentVideoRef.current = currentVideo;
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -72,6 +98,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     number | null
   >(null);
   const [roomCode, setRoomCode] = useState<string | null>(null);
+  const roomCodeRef = useRef<string | null>(null);
+  roomCodeRef.current = roomCode;
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const controlsRef = useRef<{
@@ -91,6 +119,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const lastRoomTsRef = useRef<number>(0);
   const muteRoomPushUntilRef = useRef<number>(0);
 
+  // Cross-device sync (and nt__ts write tracking for backups); reload once if the cloud brought new data
+  useEffect(() => {
+    startSync(() => window.location.reload());
+  }, []);
+
   const showToast = useCallback((msg: string, ms = 2600) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastMessage(msg);
@@ -102,7 +135,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const playVideo = useCallback((video: VideoItem, startSeconds?: number) => {
+    // Same video asked to start somewhere specific (timestamp link / clip): just seek
+    if (currentVideoRef.current?.id === video.id) {
+      if (startSeconds !== undefined) {
+        controlsRef.current?.seek(startSeconds);
+        setCurrentTime(startSeconds);
+      }
+      return;
+    }
     setCurrentVideo(video);
+    setStartAt(startSeconds ?? null);
+    setUpNext(null);
     setChapters([]);
     setClipRange(null);
     if (startSeconds !== undefined) {
@@ -193,12 +236,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const pushRoomState = useCallback(
     async (code: string, vid: string, t: number, playing: boolean) => {
       if (Date.now() < muteRoomPushUntilRef.current) return;
+      const token = roomTokenFor(code);
+      if (!token) return;
       try {
         const res = await fetch("/api/room", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            action: "update",
             code,
+            token,
             vid,
             t,
             playing,
@@ -239,21 +286,36 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     [roomCode, currentVideo, pushRoomState]
   );
 
+  // The server generates the room code and a secret token; only token holders can steer the room
   const createWatchRoom = useCallback(
     async (video: VideoItem): Promise<string | null> => {
-      const code = Math.random()
-        .toString(36)
-        .slice(2, 7)
-        .toUpperCase()
-        .replace(/[^A-Z0-9]/g, "A");
-      setRoomCode(code);
-      const t = controlsRef.current?.getTime() || 0;
-      await pushRoomState(code, video.id, t, isPlaying);
-      return code;
+      try {
+        const res = await fetch("/api/room", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "create",
+            vid: video.id,
+            t: controlsRef.current?.getTime() || 0,
+            playing: isPlaying,
+            by: myUserIdRef.current,
+          }),
+        });
+        if (!res.ok) return null;
+        const data = (await res.json()) as { room?: { code: string; ts: number }; token?: string };
+        if (!data.room || !data.token) return null;
+        saveRoomToken(data.room.code, data.token);
+        lastRoomTsRef.current = data.room.ts;
+        setRoomCode(data.room.code);
+        return data.room.code;
+      } catch {
+        return null;
+      }
     },
-    [isPlaying, pushRoomState]
+    [isPlaying]
   );
 
+  // Joining with the code gets a member token from the server, so the friend can steer playback too
   const joinWatchRoom = useCallback(
     async (rawCode: string): Promise<string | null> => {
       const code = rawCode
@@ -262,13 +324,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         .slice(0, 12);
       if (!code) return null;
       try {
-        const res = await fetch(`/api/room?code=${encodeURIComponent(code)}`);
+        const res = await fetch("/api/room", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "join", code }),
+        });
         if (!res.ok) return null;
-        const data = await res.json();
-        if (data.error || !data.vid) return null;
+        const data = (await res.json()) as { room?: { vid: string }; token?: string };
+        if (!data.room?.vid || !data.token) return null;
+        saveRoomToken(code, data.token);
+        if (roomCodeRef.current !== code) showToast("دخلت الأوضة. هتتفرجوا مع بعض");
         setRoomCode(code);
-        showToast("دخلت الأوضة. هتتفرجوا مع بعض");
-        return data.vid as string;
+        return data.room.vid;
       } catch {
         return null;
       }
@@ -297,6 +364,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           return;
         lastRoomTsRef.current = r.ts;
         muteRoomPushUntilRef.current = Date.now() + 2000;
+        // Someone in the room moved to another video: everyone follows
+        if (r.vid && r.vid !== currentVideoRef.current?.id) {
+          router.push(`/watch/${encodeURIComponent(r.vid)}?room=${encodeURIComponent(roomCode)}`);
+          return;
+        }
         const want = r.t + (r.playing ? r.now - r.ts : 0);
         const curT = controlsRef.current?.getTime() || 0;
         if (Math.abs(curT - want) > 2.5) {
@@ -307,7 +379,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       } catch {}
     }, 1500);
     return () => clearInterval(id);
-  }, [roomCode]);
+  }, [roomCode, router]);
 
   const isMini = !!currentVideo && !slotElement;
 
@@ -315,6 +387,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     <PlayerContext.Provider
       value={{
         currentVideo,
+        startAt,
+        upNext,
+        setUpNext,
         isPlaying,
         currentTime,
         duration,

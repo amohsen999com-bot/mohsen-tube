@@ -23,6 +23,8 @@ export interface YTPlayerInstance {
   loadModule(module: string): void;
   unloadModule(module: string): void;
   destroy(): void;
+  /** Swap the video inside the same player (no new iframe, no black frame). */
+  loadVideoById(args: { videoId: string; startSeconds?: number }): void;
 }
 
 export interface YTPlayerOptions {

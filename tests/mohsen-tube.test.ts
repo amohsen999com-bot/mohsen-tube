@@ -9,16 +9,32 @@ import {
   stemWord,
 } from "../src/lib/arabic.ts";
 import {
+  createRoom,
+  getAggregatedLabels,
   getCatalogSummary,
   getChannelPageData,
   getDb,
   getFeedVideos,
+  getRelatedGraph,
   getRoom,
   getVideoDetail,
+  joinRoom,
   saveViewerLabel,
   searchVideos,
-  upsertRoom,
+  updateRoom,
+  voterId,
 } from "../src/lib/db.ts";
+import {
+  getSessionAffinity,
+  learnFromVideo,
+  newFromLoved,
+  relatedScores,
+  resetModelCache,
+  SESSION_HALF,
+  sessionValue,
+} from "../src/lib/client/algo.ts";
+import { deepMerge, mergeSnapshots } from "../src/lib/client/sync.ts";
+import type { VideoItem } from "../src/lib/types.ts";
 import {
   CAIRO_LOCATION,
   calculatePrayerTimes,
@@ -144,46 +160,187 @@ describe("SQLite + FTS5 Catalog & Search Engine", () => {
     assert.ok(ch.videos.length > 0);
   });
 
-  it("validates watch-together rooms and viewer labels against invalid input", () => {
-    const sample = getFeedVideos({ limit: 1 }).videos[0];
-    const badRoom = upsertRoom({
-      code: "<script>",
-      vid: "nonexistent_video_id",
-      t: 10,
-      playing: true,
-      by: "user1",
-    });
-    assert.equal(badRoom, null);
+  it("keeps the fun category's OR clause inside is_curated (SQL precedence)", () => {
+    const fun = getFeedVideos({ category: "fun", limit: 1500, offset: 0 });
+    assert.ok(fun.videos.length > 0);
+    assert.ok(fun.videos.every((v) => !(v.g === "بودكاست" && v.tp === "بيزنس")));
+    const db = getDb();
+    const uncurated = (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM videos WHERE is_curated = 0 AND (g IN ('اصنعها بنفسك', 'رياضة') OR (g = 'بودكاست' AND tp != 'بيزنس'))`
+        )
+        .get() as { n: number }
+    ).n;
+    const curated = (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM videos WHERE is_curated = 1 AND (g IN ('اصنعها بنفسك', 'رياضة') OR (g = 'بودكاست' AND tp != 'بيزنس'))`
+        )
+        .get() as { n: number }
+    ).n;
+    assert.equal(fun.total, curated, `fun total must not include ${uncurated} uncurated rows`);
+  });
 
-    const goodRoom = upsertRoom({
-      code: "ROOM42",
-      vid: sample.id,
-      t: 45,
-      playing: true,
-      by: "user1",
-    });
-    assert.ok(goodRoom);
-    assert.equal(goodRoom.code, "ROOM42");
-    assert.equal(getRoom("ROOM42")?.vid, sample.id);
+  it("serves a related graph for history ids, falling back to content-based lists", () => {
+    const sample = getFeedVideos({ limit: 2 }).videos;
+    const g = getRelatedGraph([sample[0].id, sample[1].id, "<bad>"]);
+    assert.ok(Array.isArray(g[sample[0].id]) && g[sample[0].id].length > 0);
+    assert.ok(!("<bad>" in g));
+  });
+});
 
-    assert.equal(
-      saveViewerLabel({
-        vid: sample.id,
-        ch: sample.c,
-        q: "invalid_q",
-        a: ["الشباب"],
-      }),
-      false
-    );
-    assert.equal(
-      saveViewerLabel({
-        vid: sample.id,
-        ch: sample.c,
-        q: "aud",
-        a: ["الشباب"],
-      }),
-      true
-    );
+describe("Watch-together room security", () => {
+  const sample = () => getFeedVideos({ limit: 1 }).videos[0];
+
+  it("creates rooms with server-generated codes and a secret token", () => {
+    const a = createRoom({ vid: sample().id, t: 12, playing: true, by: "user1" });
+    const b = createRoom({ vid: sample().id, t: 12, playing: true, by: "user1" });
+    assert.ok(a && b);
+    assert.match(a.room.code, /^[A-HJ-NP-Z2-9]{8}$/);
+    assert.notEqual(a.room.code, b.room.code);
+    assert.ok(a.token.length >= 32);
+    assert.equal(getRoom(a.room.code)?.vid, sample().id);
+  });
+
+  it("rejects invalid input on create", () => {
+    assert.equal(createRoom({ vid: "nonexistent_video_id", t: 1, playing: true, by: "user1" }), null);
+    assert.equal(createRoom({ vid: "<script>", t: 1, playing: true, by: "user1" }), null);
+    assert.equal(createRoom({ vid: sample().id, t: 1, playing: true, by: "" }), null);
+  });
+
+  it("only lets token holders update a room", () => {
+    const created = createRoom({ vid: sample().id, t: 5, playing: false, by: "host" })!;
+    const code = created.room.code;
+    const base = { code, vid: sample().id, t: 30, playing: true, by: "peer" };
+    assert.equal(updateRoom({ ...base, token: "" }), null);
+    assert.equal(updateRoom({ ...base, token: "guess-" + created.token.slice(6) }), null);
+    assert.equal(updateRoom({ ...base, code: "ZZZZZZZZ", token: created.token }), null);
+
+    const byHost = updateRoom({ ...base, token: created.token });
+    assert.ok(byHost);
+    assert.equal(byHost.t, 30);
+
+    const joined = joinRoom(code);
+    assert.ok(joined);
+    assert.notEqual(joined.token, created.token);
+    const byMember = updateRoom({ ...base, t: 45, token: joined.token });
+    assert.equal(byMember?.t, 45);
+    assert.equal(joinRoom("NOPE1234"), null);
+  });
+});
+
+describe("Viewer label allowlist & deduplication", () => {
+  it("accepts only allowlisted answers and real channels, once per voter", () => {
+    const v = getFeedVideos({ limit: 1 }).videos[0];
+    const voter = voterId("test-" + Date.now() + Math.random());
+
+    assert.equal(saveViewerLabel({ vid: v.id, q: "invalid_q", a: ["الشباب"], voter }), false);
+    assert.equal(saveViewerLabel({ vid: v.id, q: "aud", a: ["<img src=x onerror=alert(1)>"], voter }), false);
+    assert.equal(saveViewerLabel({ vid: "nonexistent_video_id", q: "aud", a: ["الشباب"], voter }), false);
+    assert.equal(saveViewerLabel({ vid: v.id, q: "aud", a: ["الشباب"], voter }), true);
+    assert.equal(saveViewerLabel({ vid: v.id, q: "aud", a: ["طالب العلم"], voter }), false, "duplicate vote");
+
+    assert.equal(saveViewerLabel({ vid: v.id, q: "trait", a: ["مش موجود"], voter }), false);
+    assert.equal(saveViewerLabel({ vid: v.id, q: "trait", a: ["هادي"], voter }), true);
+
+    const other = getCatalogSummary().channels.find((c) => c.name !== v.c)!.name;
+    assert.equal(saveViewerLabel({ vid: v.id, q: "similar", a: ["قناة وهمية"], voter }), false);
+    assert.equal(saveViewerLabel({ vid: v.id, q: "similar", a: [other], voter }), true);
+
+    const agg = getAggregatedLabels();
+    assert.ok((agg.v[v.id]?.aud?.["الشباب"] || 0) >= 1);
+    assert.ok((agg.c[v.c]?.trait?.["هادي"] || 0) >= 1);
+    for (const q of Object.values(agg.v)) {
+      for (const ans of Object.keys(q.aud || {})) assert.ok(!ans.includes("<"), "no unlisted answers");
+    }
+  });
+});
+
+describe("Recommendation layers", () => {
+  const vid = (over: Partial<VideoItem>): VideoItem => ({
+    id: "AAAAAAAAAAA", t: "فضل الصبر على البلاء", c: "قناة أ", d: 900, tp: "رقائق", g: "علماء", r: 0.5, ...over,
+  });
+
+  it("session mood: learns fast, decays with a 40-minute half-life, and favors matching videos", () => {
+    resetModelCache();
+    const watched = vid({});
+    learnFromVideo(watched, 1);
+    const now = Date.now();
+    const v0 = sessionValue("c:قناة أ", now);
+    assert.ok(v0 > 1.4 && v0 <= 4, `session value ${v0}`);
+    const half = sessionValue("c:قناة أ", now + SESSION_HALF);
+    assert.ok(Math.abs(half - v0 / 2) < 0.01, "half-life");
+    assert.equal(sessionValue("d:m", now), 0, "duration is not part of the mood");
+
+    const similar = vid({ id: "BBBBBBBBBBB", t: "الصبر عند المصيبة" });
+    const unrelated = vid({ id: "CCCCCCCCCCC", t: "Excel pivot tables", c: "قناة ب", tp: "برمجة", g: "كورسات" });
+    assert.ok(getSessionAffinity(similar) > 0.6, "strong mood match");
+    assert.ok(getSessionAffinity(similar) > getSessionAffinity(unrelated) + 0.5);
+  });
+
+  it("related graph: completion, likes (2x) and recency (0.93^i) weight the boost", () => {
+    const graph = { h1: ["x", "y"], h2: ["x"], h3: ["z"] };
+    const prog: Record<string, [number, number]> = { h1: [10, 1], h2: [10, 0.5], h3: [1, 0.05] };
+    const s = relatedScores(["h1", "h2", "h3"], prog, new Set(), graph);
+    assert.ok(Math.abs(s.get("x")! - (1 + 0.7 * 0.93)) < 1e-9);
+    assert.ok(Math.abs(s.get("y")! - 1 / 1.35) < 1e-9);
+    assert.equal(s.has("z"), false, "barely watched and not liked: no signal");
+    const liked = relatedScores(["h1", "h2", "h3"], prog, new Set(["h3"]), graph);
+    assert.ok(Math.abs(liked.get("z")! - 0.25 * 2 * 0.93 * 0.93) < 1e-9);
+  });
+
+  it("fresh from loved channels: only subscribed/loved, only the last 21 days", () => {
+    const now = new Date(2026, 10, 4).getTime();
+    const d = (daysAgo: number) => {
+      const x = new Date(now - daysAgo * 86400_000);
+      return x.getFullYear() * 10000 + (x.getMonth() + 1) * 100 + x.getDate();
+    };
+    const subs = new Set(["قناة مشترك"]);
+    const v = (daysAgo: number, c = "قناة مشترك") => vid({ c, dt: d(daysAgo) });
+    assert.ok(Math.abs(newFromLoved(v(0), subs, now) - 0.9) < 0.05);
+    assert.ok(newFromLoved(v(10), subs, now) < newFromLoved(v(2), subs, now));
+    assert.equal(newFromLoved(v(30), subs, now), 0);
+    assert.equal(newFromLoved(v(1, "قناة غريبة"), subs, now), 0);
+  });
+});
+
+describe("Cross-device sync merge", () => {
+  it("merges model features and progress per entry by timestamp instead of wiping a device", () => {
+    const local = {
+      keys: {
+        nt_model: JSON.stringify({ f: { "c:A": [2, 2_000_000_000_000], "c:B": [1, 1_700_000_000_000] } }),
+        nt_progress: JSON.stringify({ v1: [100, 0.5, 1_800_000_000_000], v2: [5, 0.1, 1_800_000_000_000] }),
+        nt_history: JSON.stringify(["v1", "v2"]),
+      },
+      ts: { nt_model: 2_000_000_000_000, nt_progress: 1_800_000_000_000, nt_history: 1_800_000_000_000 },
+    };
+    const remote = {
+      keys: {
+        nt_model: JSON.stringify({ f: { "c:B": [3, 1_900_000_000_000], "c:C": [1, 1_900_000_000_000] } }),
+        nt_progress: JSON.stringify({ v2: [400, 0.9, 1_900_000_000_000], v3: [50, 0.2, 1_900_000_000_000] }),
+        nt_history: JSON.stringify(["v3"]),
+        nt__ts: "{}",
+      },
+      ts: { nt_model: 1_900_000_000_000, nt_progress: 1_900_000_000_000, nt_history: 1_900_000_000_000 },
+    };
+    const m = mergeSnapshots(local, remote);
+    const model = JSON.parse(m.keys.nt_model);
+    assert.deepEqual(model.f["c:A"], [2, 2_000_000_000_000], "local-only feature kept");
+    assert.deepEqual(model.f["c:B"], [3, 1_900_000_000_000], "newer timestamp wins per feature");
+    assert.deepEqual(model.f["c:C"], [1, 1_900_000_000_000], "remote-only feature added");
+    const prog = JSON.parse(m.keys.nt_progress);
+    assert.deepEqual(prog.v1, [100, 0.5, 1_800_000_000_000]);
+    assert.deepEqual(prog.v2, [400, 0.9, 1_900_000_000_000], "newer device position wins per video");
+    assert.ok(prog.v3, "other device's video kept");
+    assert.deepEqual(JSON.parse(m.keys.nt_history), ["v3"], "arrays: newer side wins");
+    assert.ok(!("nt__ts" in m.keys), "bookkeeping keys never sync");
+    assert.equal(m.ts.nt_model, 2_000_000_000_000);
+  });
+
+  it("deepMerge stops at two levels and leaves non-objects to the newer side", () => {
+    assert.deepEqual(deepMerge({ a: { b: { c: { d: 1 } } } }, { a: { b: { c: { e: 2 } } } }), { a: { b: { c: { e: 2 } } } });
+    assert.equal(deepMerge("old", "new"), "new");
   });
 });
 

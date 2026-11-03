@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getVideoDetail } from "@/lib/db";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await context.params;
-    const detail = getVideoDetail(id);
+    const plRaw = request.nextUrl.searchParams.get("pl");
+    const pl = plRaw !== null && /^\d{1,6}$/.test(plRaw) ? Number(plRaw) : undefined;
+    const detail = getVideoDetail(id, pl);
     if (!detail) {
       return NextResponse.json({ error: "Video not found" }, { status: 404 });
     }

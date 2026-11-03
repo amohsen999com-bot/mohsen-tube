@@ -94,7 +94,7 @@ export const ClientStore = {
     writeLocal("nt_history", []);
   },
 
-  // Progress: { [videoId]: [seconds, fraction0to1] }
+  // Progress: { [videoId]: [seconds, fraction0to1, savedAtMs] } (the timestamp lets two devices merge per video)
   getAllProgress(): Record<string, [number, number]> {
     return readLocal<Record<string, [number, number]>>("nt_progress", {});
   },
@@ -108,7 +108,8 @@ export const ClientStore = {
     all[id] = [
       Math.max(0, Math.floor(seconds)),
       Math.round(Math.min(Math.max(fraction, 0), 1) * 100) / 100,
-    ];
+      Date.now(),
+    ] as unknown as [number, number];
     const keys = Object.keys(all);
     if (keys.length > 1500) {
       keys.slice(0, keys.length - 1500).forEach((k) => delete all[k]);

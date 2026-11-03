@@ -7,6 +7,16 @@ import { VideoItem } from "@/lib/types";
 import { AlgoEngine } from "@/lib/client/algo";
 import { usePlayer } from "@/components/player/PlayerContext";
 
+const SEARCH_HINTS = [
+  "ابحث عن درس، شيخ، أو مهارة…",
+  "جرّب: تفسير سورة الكهف",
+  "جرّب: قصص الصحابة",
+  "جرّب: تعلّم Excel من الصفر",
+  "جرّب: أحكام الصلاة",
+  "جرّب: نجارة للمبتدئين",
+  "جرّب: السيرة النبوية",
+];
+
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
@@ -18,8 +28,14 @@ export function Header() {
   const [hasSpeech, setHasSpeech] = useState(false);
   const [listening, setListening] = useState(false);
 
+  const [hint, setHint] = useState(0);
+  const [hintOut, setHintOut] = useState(false);
+
   const inputRef = useRef<HTMLInputElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const headerRef = useRef<HTMLElement | null>(null);
+  const tabsRef = useRef<HTMLElement | null>(null);
+  const inkRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -45,6 +61,7 @@ export function Header() {
         )
       ) {
         e.preventDefault();
+        document.body.classList.remove("hdr-hide");
         inputRef.current?.focus();
       }
     };
@@ -52,14 +69,64 @@ export function Header() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // Scroll glass effect
+  // Glass when scrolled; hides while scrolling down (content gets the screen), back on any scroll up.
+  // --hdr-h lets the sticky topic chips sit right under it (it's taller on phones).
   useEffect(() => {
-    const onScroll = () => {
-      document.body.classList.toggle("scrolled", window.scrollY > 8);
+    let lastY = window.scrollY;
+    const measure = () => {
+      if (headerRef.current) {
+        document.documentElement.style.setProperty("--hdr-h", headerRef.current.offsetHeight + "px");
+      }
     };
+    const onScroll = () => {
+      const y = window.scrollY;
+      const b = document.body;
+      b.classList.toggle("scrolled", y > 8);
+      if (Math.abs(y - lastY) < 6) return;
+      const searching = !!headerRef.current?.contains(document.activeElement);
+      b.classList.toggle("hdr-hide", y > lastY && y > 140 && !searching);
+      lastY = y;
+    };
+    measure();
+    window.addEventListener("resize", measure);
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", onScroll);
+      document.body.classList.remove("hdr-hide");
+    };
   }, []);
+
+  // Sliding gold capsule behind the active tab
+  useEffect(() => {
+    const place = () => {
+      const ink = inkRef.current;
+      const on = tabsRef.current?.querySelector<HTMLElement>("a.on");
+      if (!ink) return;
+      ink.style.opacity = on ? "1" : "0";
+      if (on) {
+        ink.style.left = on.offsetLeft + "px";
+        ink.style.width = on.offsetWidth + "px";
+      }
+    };
+    place();
+    document.fonts?.ready.then(place).catch(() => {});
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [pathname]);
+
+  // Rotating placeholder ideas (a blank box makes people hesitate), only while empty and unfocused
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (query || document.activeElement === inputRef.current || document.hidden) return;
+      setHintOut(true);
+      setTimeout(() => {
+        setHint((h) => (h + 1) % SEARCH_HINTS.length);
+        setHintOut(false);
+      }, 380);
+    }, 4200);
+    return () => clearInterval(id);
+  }, [query]);
 
   // Debounced search autocomplete suggestions
   useEffect(() => {
@@ -142,26 +209,34 @@ export function Header() {
   const isLibrary = pathname.startsWith("/library");
 
   return (
-    <header className="top">
+    <header className="top" ref={headerRef}>
       <div className="hdr-start">
         <Link href="/" className="logo" aria-label="محسن تيوب">
-          <span className="logo-mark">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M8 5.2v13.6c0 .8.9 1.3 1.6.8l10.3-6.8c.6-.4.6-1.2 0-1.6L9.6 4.4C8.9 3.9 8 4.4 8 5.2z" />
-            </svg>
-          </span>
+          <svg className="logo-mark" viewBox="0 0 48 48" aria-hidden="true">
+            <defs>
+              <linearGradient id="lmBg" x1="0" y1="0" x2=".35" y2="1"><stop offset="0" stopColor="#8f1438" /><stop offset=".55" stopColor="#5d0018" /><stop offset="1" stopColor="#3a000f" /></linearGradient>
+              <linearGradient id="lmGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#f6e2a4" /><stop offset=".45" stopColor="#e2b54a" /><stop offset="1" stopColor="#a87412" /></linearGradient>
+              <radialGradient id="lmGlow" cx=".3" cy=".18" r=".75"><stop offset="0" stopColor="#fff" stopOpacity=".22" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></radialGradient>
+            </defs>
+            <path d="M6 41.5V22.5C6 13.2 13.4 7.2 24 2.2c10.6 5 18 11 18 20.3v19a3.5 3.5 0 0 1-3.5 3.5h-29A3.5 3.5 0 0 1 6 41.5z" fill="url(#lmBg)" />
+            <path d="M6 41.5V22.5C6 13.2 13.4 7.2 24 2.2c10.6 5 18 11 18 20.3v19a3.5 3.5 0 0 1-3.5 3.5h-29A3.5 3.5 0 0 1 6 41.5z" fill="url(#lmGlow)" />
+            <path d="M7.4 41.3V22.6C7.4 14 14.3 8.6 24 3.8c9.7 4.8 16.6 10.2 16.6 18.8v18.7a2.3 2.3 0 0 1-2.3 2.3H9.7a2.3 2.3 0 0 1-2.3-2.3z" fill="none" stroke="url(#lmGold)" strokeOpacity=".75" strokeWidth="1.1" />
+            <path d="M19.6 20.4v13.2c0 .9 1 1.4 1.7.9l10.3-6.6c.7-.4.7-1.4 0-1.8l-10.3-6.6c-.7-.5-1.7 0-1.7.9z" fill="url(#lmGold)" stroke="url(#lmGold)" strokeWidth="2.2" strokeLinejoin="round" />
+          </svg>
           <span className="logo-txt">
-            محسن<span>تيوب</span>
+            <b>محسن</b>
+            <b>تيوب</b>
           </span>
         </Link>
 
-        <nav className="tabs">
+        <nav className="tabs" ref={tabsRef}>
           <Link href="/" className={isHome ? "on" : ""}>
             مقترح لك
           </Link>
           <Link href="/fun" className={isFun ? "on" : ""}>
             ترفيه
           </Link>
+          <span className="ink" ref={inkRef} />
         </nav>
       </div>
 
@@ -183,7 +258,8 @@ export function Header() {
           ref={inputRef}
           id="q"
           type="search"
-          placeholder="ابحث عن درس، شيخ، أو مهارة…"
+          placeholder={SEARCH_HINTS[hint]}
+          className={hintOut ? "ph-out" : ""}
           autoComplete="off"
           aria-label="بحث"
           value={query}

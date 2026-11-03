@@ -52,6 +52,9 @@ export function VideoDock() {
     sleepMode,
     sleepRemainingMinutes,
     roomCode,
+    startAt,
+    upNext,
+    playVideo,
     toastMessage,
     closePlayer,
     cycleSleepTimer,
@@ -95,6 +98,16 @@ export function VideoDock() {
   sleepModeRef.current = sleepMode;
   const currentVideoRef = useRef(currentVideo);
   currentVideoRef.current = currentVideo;
+  const startAtRef = useRef(startAt);
+  startAtRef.current = startAt;
+  const upNextRef = useRef(upNext);
+  upNextRef.current = upNext;
+  const isMiniRef = useRef(isMini);
+  isMiniRef.current = isMini;
+  const playerReadyRef = useRef(false);
+  const speedAppliedRef = useRef(false);
+  /** When the current video started, to tell "closed it right away" apart from real watching. */
+  const openedAtRef = useRef(0);
   const handledPrayersRef = useRef<Set<string>>(new Set());
   const continuousWatchSecRef = useRef<number>(0);
 
@@ -179,17 +192,55 @@ export function VideoDock() {
     });
   }, [registerPlayerControls, updatePlaybackState, wakeControls]);
 
-  // Mount or update YouTube IFrame when currentVideo changes
+  // Where a video should start: an explicit start (?s=, clip) or the saved resume point
+  const startFor = (video: { id: string }) => {
+    if (startAtRef.current !== null && startAtRef.current !== undefined) return Math.max(0, startAtRef.current);
+    const savedProg = ClientStore.getProgress(video.id);
+    return savedProg && savedProg[1] < 0.92 ? Math.max(0, savedProg[0] - 2) : 0;
+  };
+
+  // The video ended: loop / sleep-at-end / queue / series next / first suggestion, with no gap
+  const handleEnded = (p: YTPlayerInstance) => {
+    if (isLoopRef.current) {
+      p.seekTo(0, true);
+      p.playVideo();
+      return;
+    }
+    if (sleepModeRef.current === "end") {
+      p.pauseVideo();
+      updatePlaybackState({ playing: false });
+      showToast("مؤقّت النوم وقّف التشغيل في آخر الفيديو", 5000);
+      return;
+    }
+    const next = ClientStore.shiftQueue() || upNextRef.current;
+    if (!next || next.id === currentVideoRef.current?.id) return;
+    if (isMiniRef.current) playVideo(next); // keep going in the floating player
+    else router.push(`/watch/${encodeURIComponent(next.id)}`); // the watch page reuses this same player
+  };
+  const handleEndedRef = useRef(handleEnded);
+  handleEndedRef.current = handleEnded;
+
+  // One player for the whole session: created once, then every new video is swapped in with
+  // loadVideoById, so switching (including auto-advance) never shows a black frame or YouTube's UI.
   useEffect(() => {
     const video = currentVideo;
     if (!video || !iframeHostRef.current) return;
 
     setIsLiked(ClientStore.hasInList("liked", video.id));
-    const savedProg = ClientStore.getProgress(video.id);
-    const startSec =
-      savedProg && savedProg[1] < 0.92 ? Math.max(0, savedProg[0] - 2) : 0;
-    const savedSpeed = ClientStore.getSpeedForChannel(video.c);
-    setSpeed(savedSpeed);
+    setSpeed(ClientStore.getSpeedForChannel(video.c));
+    speedAppliedRef.current = false;
+    const startSec = startFor(video);
+
+    const existing = playerRef.current;
+    if (existing && playerReadyRef.current) {
+      try {
+        existing.loadVideoById({ videoId: video.id, startSeconds: Math.floor(startSec) });
+        existing.unloadModule("captions");
+      } catch {}
+      openedAtRef.current = Date.now();
+      return;
+    }
+    if (existing) return; // still booting: onReady loads whatever is current by then
 
     const host = iframeHostRef.current;
     host.innerHTML = "";
@@ -215,75 +266,91 @@ export function VideoDock() {
     // Overscan crop + pointer-events: none so zero YouTube branding or hover UI can appear
     iframe.className = "yt-cropped-iframe";
     host.appendChild(iframe);
-
-    let speedApplied = false;
-    let disposed = false;
+    openedAtRef.current = Date.now();
+    const bootId = video.id;
 
     const unsubscribe = onYouTubeReady(() => {
-      if (disposed || !window.YT?.Player) return;
+      if (!window.YT?.Player || playerRef.current) return;
       const p = new window.YT.Player(iframe, {
         events: {
           onReady: () => {
-            if (disposed) return;
+            playerReadyRef.current = true;
             try {
               p.unloadModule("captions");
             } catch {}
-            const v = p.getVolume?.() ?? 100;
-            setVolume(v);
+            setVolume(p.getVolume?.() ?? 100);
             setIsMuted(p.isMuted?.() ?? false);
+            // The viewer moved on while the player was booting
+            const cur = currentVideoRef.current;
+            if (cur && cur.id !== bootId) {
+              try {
+                p.loadVideoById({ videoId: cur.id, startSeconds: Math.floor(startFor(cur)) });
+              } catch {}
+            }
           },
           onStateChange: (e) => {
-            if (disposed) return;
             const st = e.data;
             if (st === YTPlayerState.ENDED) {
-              if (isLoopRef.current) {
-                p.seekTo(0, true);
-                p.playVideo();
-                return;
-              }
-              if (sleepModeRef.current === "end") {
-                p.pauseVideo();
-                updatePlaybackState({ playing: false });
-                showToast("مؤقّت النوم وقّف التشغيل في آخر الفيديو", 5000);
-                return;
-              }
-              const nextQueued = ClientStore.shiftQueue();
-              if (nextQueued) {
-                router.push(`/watch/${nextQueued.id}`);
-                return;
-              }
+              handleEndedRef.current(p);
+              if (isLoopRef.current) return;
             }
-
             const playingNow = st === YTPlayerState.PLAYING;
             if (st !== YTPlayerState.BUFFERING) {
               updatePlaybackState({ playing: playingNow });
             }
-
-            if (playingNow && !speedApplied) {
-              speedApplied = true;
-              const chSpeed = ClientStore.getSpeedForChannel(video.c);
-              if (chSpeed !== 1) {
-                try {
-                  p.setPlaybackRate(chSpeed);
-                  setSpeed(chSpeed);
-                } catch {}
-              }
+            const cur = currentVideoRef.current;
+            if (playingNow && cur && !speedAppliedRef.current) {
+              speedAppliedRef.current = true;
+              const chSpeed = ClientStore.getSpeedForChannel(cur.c);
+              try {
+                p.setPlaybackRate(chSpeed);
+                setSpeed(chSpeed);
+              } catch {}
             }
           },
         },
       });
       playerRef.current = p;
     });
-
     return () => {
-      disposed = true;
       unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentVideo?.id]);
+
+  // Closed the player entirely: tear it down
+  useEffect(() => {
+    if (currentVideo) return;
+    try {
+      playerRef.current?.destroy?.();
+    } catch {}
+    playerRef.current = null;
+    playerReadyRef.current = false;
+    if (iframeHostRef.current) iframeHostRef.current.innerHTML = "";
+  }, [currentVideo]);
+
+  // Switching away from a video: closing it within 45s and before 10% teaches the algorithm "not for me"
+  useEffect(() => {
+    const v = currentVideo;
+    if (!v) return;
+    return () => {
+      const p = ClientStore.getProgress(v.id);
+      AlgoEngine.recordClose(v, p?.[1] ?? 0, (Date.now() - openedAtRef.current) / 1000);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentVideo?.id]);
+
+  // Unmount (navigating away from the app shell)
+  useEffect(
+    () => () => {
       try {
         playerRef.current?.destroy?.();
       } catch {}
       playerRef.current = null;
-    };
-  }, [currentVideo, router, showToast, updatePlaybackState]);
+      playerReadyRef.current = false;
+    },
+    []
+  );
 
   // 250ms progress & clip-range & 5-second learning/wird tick
   useEffect(() => {

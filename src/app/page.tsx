@@ -12,18 +12,9 @@ import { getDayKey, getWird, getWirdStreak } from "@/lib/client/prayer";
 
 const FEED_BATCH = 24;
 
-function getGreeting(): [string, string] {
+function getGreeting(): string {
   const h = new Date().getHours();
-  if (h >= 5 && h < 12) {
-    return ["صباح الهمة والعمل", "اخترنالك بداية تفتح النفس وتزودك علم وإنجاز"];
-  }
-  if (h >= 12 && h < 17) {
-    return ["طاب يومك", "تشكيلة متوازنة بين العلم والعمل والترويح المباح"];
-  }
-  if (h >= 17 && h < 21) {
-    return ["مساء الخير والبركة", "دروس نافعة ومهارات عملية تناسب وقت المساء"];
-  }
-  return ["مساء السكينة", "مقاطع هادية ورقائق وقصص تريّح القلب آخر اليوم"];
+  return h >= 4 && h < 12 ? "صباح الخير" : h >= 12 && h < 17 ? "نهارك سعيد" : h >= 17 && h < 20 ? "مساء الخير" : "مساء النور";
 }
 
 export default function HomePage() {
@@ -38,6 +29,10 @@ export default function HomePage() {
   const usedIdsRef = useRef<Set<string>>(new Set());
   const recentChannelsRef = useRef<string[]>([]);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const chipsBarRef = useRef<HTMLDivElement | null>(null);
+  const chipsRowRef = useRef<HTMLDivElement | null>(null);
+  const feedRef = useRef<HTMLDivElement | null>(null);
+  const [chipEdges, setChipEdges] = useState({ prev: false, next: false });
 
   useEffect(() => {
     return subscribeStore(() => setStoreTick((n) => n + 1));
@@ -66,6 +61,16 @@ export default function HomePage() {
           AlgoEngine.setLabels(summaryData.labels);
         }
         const list: VideoItem[] = videosData.videos || [];
+
+        // "Watched together" graph for what you finished or liked recently (feeds relatedScores)
+        const recent = ClientStore.getList("history").slice(0, 40);
+        if (recent.length) {
+          try {
+            const g = await fetch(`/api/videos?related_for=${encodeURIComponent(recent.join(","))}`).then((r) => r.json());
+            if (g?.graph) AlgoEngine.setRelatedGraph(g.graph);
+          } catch {}
+        }
+        if (!active) return;
         setPool(list);
 
         // Fetch any partially watched videos from history
@@ -162,6 +167,48 @@ export default function HomePage() {
       .slice(0, 14);
   }, [pool]);
 
+  // Topic strip: arrows and edge fades only appear on the side that has hidden topics
+  useEffect(() => {
+    const row = chipsRowRef.current;
+    if (!row) return;
+    const paint = () => {
+      const x = Math.abs(row.scrollLeft);
+      const max = row.scrollWidth - row.clientWidth;
+      setChipEdges({ prev: x > 4, next: x < max - 4 });
+    };
+    paint();
+    row.addEventListener("scroll", paint, { passive: true });
+    window.addEventListener("resize", paint);
+    return () => {
+      row.removeEventListener("scroll", paint);
+      window.removeEventListener("resize", paint);
+    };
+  }, [topTopics, loading]);
+
+  const scrollChips = (dir: 1 | -1) => {
+    const row = chipsRowRef.current;
+    // RTL: "previous" topics are to the right (positive), more topics to the left (negative)
+    if (row) row.scrollBy({ left: dir * row.clientWidth * 0.7, behavior: "smooth" });
+  };
+
+  const pickTopic = (tp: string, btn: HTMLButtonElement) => {
+    if (tp === selectedTopic) return;
+    setSelectedTopic(tp);
+    btn.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+    const feed = feedRef.current;
+    if (feed) {
+      feed.classList.remove("swap");
+      void feed.offsetWidth;
+      feed.classList.add("swap");
+      // Scrolled down? go back to the top of the new suggestions (just under the sticky strip)
+      const header = document.querySelector<HTMLElement>(".top");
+      const top =
+        feed.getBoundingClientRect().top + window.scrollY -
+        (chipsBarRef.current?.offsetHeight || 0) - (header?.offsetHeight || 0) - 8;
+      if (window.scrollY > top) window.scrollTo({ top, behavior: "smooth" });
+    }
+  };
+
   const heroTarget = useMemo((): [VideoItem | null, boolean] => {
     if (resumeVideos.length > 0) {
       return [resumeVideos[0], true];
@@ -173,7 +220,7 @@ export default function HomePage() {
   }, [resumeVideos, displayedFeed]);
 
   const [heroVideo, isResumingHero] = heroTarget;
-  const [greetingTitle, greetingSub] = getGreeting();
+  const greetingTitle = getGreeting();
 
   // Daily Wird ring stats
   const wird = getWird();
@@ -226,7 +273,6 @@ export default function HomePage() {
         <div className="fh-title">
           <small>{greetingTitle}</small>
           <h2>مقترح لك</h2>
-          <p>{greetingSub}</p>
         </div>
 
         {wird.goal > 0 && (
@@ -270,12 +316,18 @@ export default function HomePage() {
         )}
       </div>
 
-      <div className="chips-bar">
-        <div className="topic-chips">
+      <div
+        ref={chipsBarRef}
+        className={`chips-bar ${chipEdges.prev ? "can-prev" : ""} ${chipEdges.next ? "can-next" : ""}`}
+      >
+        <button type="button" className="chips-nav prev" aria-label="المواضيع اللي قبل" tabIndex={-1} onClick={() => scrollChips(1)}>
+          ›
+        </button>
+        <div className="topic-chips" ref={chipsRowRef}>
           <button
             type="button"
             className={selectedTopic === "" ? "on" : ""}
-            onClick={() => setSelectedTopic("")}
+            onClick={(e) => pickTopic("", e.currentTarget)}
           >
             الكل
           </button>
@@ -284,15 +336,18 @@ export default function HomePage() {
               key={tp}
               type="button"
               className={selectedTopic === tp ? "on" : ""}
-              onClick={() => setSelectedTopic(tp)}
+              onClick={(e) => pickTopic(tp, e.currentTarget)}
             >
               {tp}
             </button>
           ))}
         </div>
+        <button type="button" className="chips-nav next" aria-label="مواضيع أكتر" tabIndex={-1} onClick={() => scrollChips(-1)}>
+          ‹
+        </button>
       </div>
 
-      <div className="grid" id="feed">
+      <div className="grid" id="feed" ref={feedRef}>
         {gridVideos.map((v) => (
           <VideoCard
             key={v.id}

@@ -3,10 +3,14 @@
 import type { LabelsAggregate, VideoItem } from "../types.ts";
 import { normArabic } from "../arabic.ts";
 import { ClientStore, readLocal, writeLocal } from "./store.ts";
+import { Growth, type GrowthContext } from "./growth.ts";
 
 const HALF_LIFE = 4 * 86400_000; // 4 days
 const MAX_KEYS = 4000;
 const MODEL_KEY = "nt_model";
+/** "مزاجك دلوقتي": short-term session memory, half of it fades every 40 minutes. */
+export const SESSION_HALF = 40 * 60_000;
+const SESSION_MAX_AGE = 6 * 3600_000;
 
 const STOP_WORDS = new Set(
   (
@@ -56,6 +60,8 @@ interface ModelData {
   f: Record<string, [number, number]>;
   imp: Record<string, number>;
   impAt: Record<string, number>;
+  /** Session mood: { feature: [value, lastUpdate] } */
+  ss: Record<string, [number, number]>;
 }
 
 let modelCache: ModelData | null = null;
@@ -68,12 +74,15 @@ function getModel(): ModelData {
     f: raw.f || {},
     imp: raw.imp || {},
     impAt: raw.impAt || {},
+    ss: raw.ss || {},
   };
   return modelCache;
 }
 
 function saveModel(): void {
   const m = getModel();
+  const now = Date.now();
+  for (const k of Object.keys(m.ss)) if (now - m.ss[k][1] > SESSION_MAX_AGE) delete m.ss[k];
   const keys = Object.keys(m.f);
   if (keys.length > MAX_KEYS) {
     keys
@@ -95,6 +104,21 @@ function bumpFeature(key: string, delta: number): void {
   const m = getModel();
   const nextVal = Math.max(-6, Math.min(6, featureValue(key) + delta));
   m.f[key] = [nextVal, Date.now()];
+}
+
+export function sessionValue(key: string, now = Date.now()): number {
+  const e = getModel().ss[key];
+  return e ? e[0] * Math.pow(0.5, (now - e[1]) / SESSION_HALF) : 0;
+}
+
+function bumpSession(key: string, delta: number): void {
+  const m = getModel();
+  m.ss[key] = [Math.max(-4, Math.min(4, sessionValue(key) + delta)), Date.now()];
+}
+
+/** Test/maintenance hook: drop the in-memory model so the next read comes from localStorage. */
+export function resetModelCache(): void {
+  modelCache = null;
 }
 
 const isNight = (h = new Date().getHours()) => h >= 20 || h < 5;
@@ -166,8 +190,22 @@ export function learnFromVideo(v: VideoItem, reward: number): void {
   for (const [k, w] of extractFeatures(v)) {
     bumpFeature(k, reward * w);
     bumpFeature(`${s}:${k}`, reward * w * 0.7);
+    if (!k.startsWith("d:")) bumpSession(k, reward * w * 1.5); // the mood moves faster
   }
   saveModel();
+}
+
+/**
+ * How well a video matches this session's mood. Title words carry little weight in the long-term
+ * features (they're split across the title), but in the mood they're the clearest signal.
+ */
+export function getSessionAffinity(v: VideoItem): number {
+  let a = 0;
+  for (const [k, w] of extractFeatures(v)) {
+    if (k.startsWith("d:")) continue;
+    a += (k.startsWith("w:") ? 3.5 : 1) * w * Math.tanh(sessionValue(k) / 0.8);
+  }
+  return 0.8 * a;
 }
 
 export function getVideoAffinity(v: VideoItem): number {
@@ -186,8 +224,54 @@ export function getVideoAffinity(v: VideoItem): number {
   if (sims.length) {
     a += 0.35 * Math.max(...sims.map((c) => Math.tanh(featureValue("c:" + c) / 2)));
   }
-  return a;
+  return a + getSessionAffinity(v);
 }
+
+// ---------- "Watched together" graph ----------
+let relatedGraph: Record<string, string[]> = {};
+
+/** Related lists (by video) for the viewer's recent history, fetched from /api/videos?related_for=... */
+export function setRelatedGraph(graph: Record<string, string[]>): void {
+  relatedGraph = graph || {};
+}
+
+/**
+ * Score for every video connected to what you finished or liked recently: weighted by how much you
+ * watched it, likes count double, recent ones count more (0.93^i), and earlier slots in its list count more.
+ */
+export function relatedScores(
+  history: string[],
+  progress: Record<string, [number, number]>,
+  liked: Set<string>,
+  graph: Record<string, string[]> = relatedGraph
+): Map<string, number> {
+  const out = new Map<string, number>();
+  history.slice(0, 40).forEach((id, i) => {
+    const frac = progress[id]?.[1] ?? 0;
+    const isLiked = liked.has(id);
+    if (frac < 0.3 && !isLiked) return;
+    const w = Math.min(1, frac + 0.2) * (isLiked ? 2 : 1) * Math.pow(0.93, i);
+    (graph[id] || []).slice(0, 12).forEach((rid, j) => {
+      out.set(rid, (out.get(rid) || 0) + w / (1 + 0.35 * j));
+    });
+  });
+  return out;
+}
+
+/** Published in the last 21 days by a channel you're subscribed to or clearly love. */
+export function newFromLoved(v: VideoItem, subs: Set<string>, now = Date.now()): number {
+  if (!v.dt) return 0;
+  const love = subs.has(v.c) ? 1 : Math.min(1, featureValue("c:" + v.c) / 1.5);
+  if (love < 0.3) return 0;
+  const y = Math.floor(v.dt / 10000);
+  const m = Math.floor(v.dt / 100) % 100;
+  const d = v.dt % 100;
+  const ageDays = (now - new Date(y, m - 1, d).getTime()) / 86400_000;
+  return ageDays < 0 || ageDays > 21 ? 0 : 0.9 * love * (1 - ageDays / 21);
+}
+
+/** Why each video in the last built feed is there (shown on the card). */
+const whyById = new Map<string, string>();
 
 export function getTimeFit(v: VideoItem): number {
   const mins = (v.d || 0) / 60;
@@ -216,6 +300,8 @@ const ABOUT_TOPIC: Record<string, string> = {
 };
 
 export function getWhyLabel(v: VideoItem): string {
+  const fromFeed = whyById.get(v.id);
+  if (fromFeed) return fromFeed;
   const subs = ClientStore.getSubs();
   if (subs.includes(v.c)) return `من اشتراكاتك • ${v.c}`;
   if (featureValue("c:" + v.c) > 1.2) return `بتسمع ${v.c} كتير`;
@@ -227,6 +313,8 @@ export function getWhyLabel(v: VideoItem): string {
   }
   return ABOUT_TOPIC[v.tp] || v.tp || "مقترح لك";
 }
+
+const finished = new Set<string>();
 
 export const AlgoEngine = {
   setLabels(labels: LabelsAggregate) {
@@ -254,12 +342,27 @@ export const AlgoEngine = {
     saveModel();
   },
 
+  setRelatedGraph,
+
   recordWatch(v: VideoItem, seconds: number, fraction: number): void {
     if (seconds < 15 && fraction < 0.08) return;
     const m = getModel();
     delete m.imp[v.id];
     delete m.impAt[v.id];
     learnFromVideo(v, 0.14);
+    Growth.record(v, 5);
+    if (fraction > 0.7 && !finished.has(v.id)) {
+      finished.add(v.id);
+      Growth.finish(v);
+    }
+  },
+
+  /** Left a video: closing it within 45s and before 10% is a clear "not for me". */
+  recordClose(v: VideoItem, fraction: number, watchedSeconds: number): void {
+    if (fraction < 0.1 && watchedSeconds < 45) {
+      learnFromVideo(v, -0.7);
+      Growth.quit(v);
+    }
   },
 
   recordLike(v: VideoItem, liked: boolean): void {
@@ -299,14 +402,37 @@ export const AlgoEngine = {
 
     if (!candidates.length) return [];
 
+    const history = ClientStore.getList("history");
+    const liked = new Set(ClientStore.getList("liked"));
+    const rel = relatedScores(history, progress, liked);
+    const lastDoneId = history.find((id) => (progress[id]?.[1] ?? 0) > 0.6);
+    const ctx: GrowthContext = Growth.context(
+      lastDoneId ? pool.find((x) => x.id === lastDoneId) || null : null
+    );
+    const learned = Object.keys(getModel().f).length > 0;
+    const now = Date.now();
+
     const scored = candidates.map((v) => {
       const aff = getVideoAffinity(v);
+      const mood = learned ? getSessionAffinity(v) : 0;
       const tFit = getTimeFit(v);
       const quality = 0.55 * (v.s ?? v.r ?? 0.5) + 0.25 * (v.q ?? 0.5) + 0.2 * (v.hd ? 1 : 0);
       const subBoost = subs.has(v.c) ? 0.65 : 0;
       const skipPenalty = (getSkips(v.id)[0] || 0) * 0.35;
-      const score = 1.35 * aff + 0.45 * tFit + 0.75 * quality + subBoost - skipPenalty;
-      return { v, score, cat: getVideoCategory(v) };
+      const relScore = rel.get(v.id) || 0;
+      const fresh = newFromLoved(v, subs, now);
+      const [gb, gwhy, step] = Growth.bonus(v, aff, ctx);
+      const score =
+        1.35 * aff + 0.45 * tFit + 0.75 * quality + subBoost - skipPenalty +
+        1.1 * Math.tanh(relScore) + fresh + gb;
+      const why =
+        fresh > 0.3 ? "جديد من " + v.c
+        : mood > 0.6 ? "على مزاجك دلوقتي"
+        : gwhy && (gb > 0.6 || ctx.season) ? gwhy
+        : step && getVideoCategory(v) !== "ترفيه" ? step
+        : relScore > 0.5 ? "شبه حاجة كمّلتها"
+        : null;
+      return { v, score, cat: getVideoCategory(v), why };
     });
 
     scored.sort((a, b) => b.score - a.score);
@@ -333,7 +459,10 @@ export const AlgoEngine = {
       }
       if (pickIdx < 0) break;
 
-      const chosen = scored.splice(pickIdx, 1)[0].v;
+      const pick = scored.splice(pickIdx, 1)[0];
+      const chosen = pick.v;
+      if (pick.why) whyById.set(chosen.id, pick.why);
+      else whyById.delete(chosen.id);
       usedIds.add(chosen.id);
       recentChannels.push(chosen.c);
       out.push(chosen);
