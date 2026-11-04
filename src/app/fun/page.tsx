@@ -85,7 +85,7 @@ export default function FunPage() {
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [mixLength]);
+  }, [mixLength, shownMix]);
 
   if (!layout) {
     return <p className="muted pad">جاري التحميل...</p>;

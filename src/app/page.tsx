@@ -128,10 +128,11 @@ export default function HomePage() {
     }
   }, [filteredPool, rebuildFeed]);
 
-  // Infinite scroll observer
+  // Infinite scroll observer. Re-attached once loading ends (the sentinel only exists then) and after every
+  // batch, so it fires again even if the end of the feed is still on screen (short feeds, tall phones).
   useEffect(() => {
     const el = loadMoreRef.current;
-    if (!el) return;
+    if (!el || loading) return;
     const io = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting && filteredPool.length > 0) {
@@ -150,7 +151,7 @@ export default function HomePage() {
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [filteredPool]);
+  }, [filteredPool, loading, displayedFeed.length]);
 
   const topTopics = useMemo(() => {
     const counts: Record<string, number> = {};
