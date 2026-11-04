@@ -1382,3 +1382,7 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
 @media (hover: hover) and (pointer: fine) {
   .dock.yt-native:not(.mini) .yt-click-block { display: block; position: absolute; left: 0; right: 0; top: 60px; bottom: 56px; z-index: 4; }
 }
+/* الموبايل: زرار ملء الشاشة أقصى الشمال تحت — قاعد بالظبط فوق زرار "نسخ الرابط" بتاع يوتيوب فبيغطيه */
+@media (hover: none), (pointer: coarse) {
+  .yt-fs { right: auto; left: 6px; bottom: 2px; width: 44px; height: 40px; z-index: 6; background: rgba(12, 10, 13, .88); }
+}
