@@ -994,7 +994,19 @@ body.hdr-hide .top { transform: translateY(-100%); box-shadow: none; }
   .tabs a { padding: 6px 12px; font-size: 14px; }
   .top .lib-link { width: 38px; height: 38px; }
 }
-@media (max-width: 350px) { .logo-txt { display: none; } }
+/* موبايل صغير: ٣ صفوف مرتبة بدل ما كله يتزنق في صف واحد
+   ١) اللوجو يمين والأيقونات شمال  ٢) البحث بعرض الشاشة  ٣) التبويبين كمفتاح واحد بنصّين متساويين */
+@media (max-width: 600px) {
+  .top { grid-template-columns: 1fr auto; grid-template-areas: "logo end" "search search" "tabs tabs"; gap: 10px 8px; padding: 10px 14px 10px; }
+  .hdr-start { display: contents; }
+  .logo { grid-area: logo; justify-self: start; }
+  .hdr-end { grid-area: end; gap: 2px; }
+  .tabs { grid-area: tabs; display: flex; width: 100%; padding: 3px; }
+  .tabs a { flex: 1; text-align: center; white-space: nowrap; padding: 7px 8px; font-size: 14.5px; }
+  .top .search { height: 42px; }
+  .top .lib-link { width: 38px; height: 38px; }
+}
+@media (max-width: 340px) { .logo-txt { font-size: 17px; } }
 @media (prefers-reduced-motion: reduce) { .top { transition: none; } body.hdr-hide .top { transform: none; } }
 
 
