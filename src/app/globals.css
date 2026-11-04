@@ -1172,3 +1172,68 @@ body.hdr-hide .chips-bar { top: 0; }
   .logo-txt b:first-child { font-size: 15px; }
   .logo-txt b:last-child { font-size: 17.1px; }
 }
+
+/* =====================================================================
+   "إيه اللي يهمك؟" أول مرة — كارت بهوية الموقع: محراب ودهبي ونبيتي على زجاج غامق.
+   - الراس (اللوجو + السؤال + زرار تخطي) والرجل (تخطي + ابدأ) ثابتين، والاختيارات في النص بتسكرول
+     لوحدها، فزرار التخطي دايمًا باين مهما كانت الشاشة صغيرة.
+   - مؤشر "اختار 3" بيشجّع من غير ما يجبر: تقدر تبدأ أو تتخطى في أي وقت.
+   ===================================================================== */
+.ob-overlay { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px;
+  background: radial-gradient(900px 500px at 50% 0%, rgba(122, 10, 38, .45), transparent 70%), rgba(10, 8, 11, .78);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: obFade .45s var(--ease, ease) both; }
+.ob-card { position: relative; display: flex; flex-direction: column; width: min(680px, 100%);
+  max-height: min(820px, calc(100dvh - 32px)); border-radius: 24px; overflow: hidden;
+  background: linear-gradient(180deg, rgba(46, 12, 24, .96) 0%, rgba(30, 27, 31, .98) 34%, rgba(25, 23, 27, .98) 100%);
+  border: 1px solid rgba(210, 159, 34, .28);
+  box-shadow: 0 40px 90px -30px rgba(0, 0, 0, .9), 0 0 0 1px rgba(0, 0, 0, .4), inset 0 1px 0 rgba(255, 255, 255, .06);
+  animation: obRise .6s var(--ease, ease) both; }
+.ob-head { position: relative; flex: none; display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: 26px 28px 18px; border-bottom: 1px solid rgba(255, 255, 255, .06); }
+.ob-mark { width: 52px; height: 52px; margin-bottom: 10px; filter: drop-shadow(0 8px 18px rgba(93, 0, 24, .7)); }
+.ob-eyebrow { font-size: 13px; font-weight: 500; color: var(--gold-soft); letter-spacing: .2px; }
+.ob-head h2 { margin: 4px 0 6px; font-family: "Reem Kufi", "Noto Sans Arabic", sans-serif; font-size: 30px; font-weight: 700; }
+.ob-head p { margin: 0; max-width: 460px; font-size: 14.5px; line-height: 1.7; color: var(--muted); }
+.ob-skip-top { position: absolute; top: 16px; left: 16px; height: 34px; padding: 0 16px; border-radius: 999px; font: inherit;
+  font-size: 14px; color: var(--muted); background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1);
+  cursor: pointer; transition: color .25s, background .25s, border-color .25s; }
+.ob-skip-top:hover { color: var(--text); background: rgba(255, 255, 255, .09); border-color: rgba(255, 255, 255, .2); }
+.ob-meter { display: inline-flex; align-items: center; gap: 10px; margin-top: 14px; padding: 6px 14px; border-radius: 999px;
+  font-size: 13px; color: var(--muted); background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .07);
+  transition: color .3s, border-color .3s, background .3s; }
+.ob-meter.full { color: var(--gold-soft); border-color: rgba(210, 159, 34, .35); background: rgba(210, 159, 34, .1); }
+.ob-dots { display: inline-flex; gap: 5px; }
+.ob-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, .15); transition: background .3s, transform .3s; }
+.ob-dots i.on { background: var(--gold); transform: scale(1.15); }
+.ob-body { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 28px 18px; overscroll-behavior: contain;
+  scrollbar-width: thin; scrollbar-color: rgba(210, 159, 34, .35) transparent; }
+.ob-sec h4 { display: flex; align-items: center; gap: 10px; margin: 18px 0 10px; font-size: 15px; font-weight: 700; color: var(--text); }
+.ob-sec h4::before { content: ""; width: 4px; height: 16px; border-radius: 2px; background: linear-gradient(var(--gold) 0 50%, var(--wine-2) 50%); }
+.ob-sec h4 span { font-weight: 400; font-size: 13px; color: var(--muted); }
+.ob-card .ob-chips { gap: 8px; }
+.ob-card .ob-chip { position: relative; height: 38px; padding: 0 16px; border-radius: 999px; font-size: 14.5px;
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .09); color: var(--text);
+  transition: background .25s, border-color .25s, color .25s, transform .15s, padding .25s; }
+.ob-card .ob-chip:hover { background: rgba(255, 255, 255, .09); border-color: rgba(210, 159, 34, .4); }
+.ob-card .ob-chip.on { padding-right: 34px; color: #1c1408; font-weight: 700; border-color: transparent;
+  background: linear-gradient(180deg, #f2d98e, #d29f22); box-shadow: 0 6px 18px -8px rgba(210, 159, 34, .8); }
+.ob-card .ob-chip.on::before { content: "✓"; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 13px; }
+.ob-foot { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 22px 18px;
+  border-top: 1px solid rgba(255, 255, 255, .06); background: rgba(20, 18, 22, .85); }
+.ob-foot button { height: 46px; border-radius: 999px; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+.ob-skip { padding: 0 22px; color: var(--muted); background: transparent; border: 1px solid rgba(255, 255, 255, .14); transition: color .25s, border-color .25s; }
+.ob-skip:hover { color: var(--text); border-color: rgba(255, 255, 255, .3); }
+.ob-go { flex: 1; max-width: 300px; border: 0; color: #1c1408; background: linear-gradient(180deg, #f2d98e, #d29f22);
+  box-shadow: 0 10px 26px -12px rgba(210, 159, 34, .9); transition: transform .2s, box-shadow .25s; }
+.ob-go:hover { transform: translateY(-1px); box-shadow: 0 14px 30px -12px rgba(210, 159, 34, 1); }
+@keyframes obFade { from { opacity: 0; } }
+@keyframes obRise { from { opacity: 0; transform: translateY(18px) scale(.98); } }
+@media (max-width: 600px) {
+  .ob-overlay { padding: 0; place-items: end center; }
+  .ob-card { width: 100%; max-height: 100dvh; border-radius: 22px 22px 0 0; }
+  .ob-head { padding: 22px 18px 14px; }
+  .ob-head h2 { font-size: 25px; }
+  .ob-body { padding: 4px 18px 14px; }
+  .ob-foot { padding: 12px 16px calc(14px + env(safe-area-inset-bottom)); }
+}
+@media (prefers-reduced-motion: reduce) { .ob-overlay, .ob-card { animation: none; } }
