@@ -24,6 +24,11 @@ const PAUSE_PATH = "M7 5h3.4v14H7zM13.6 5H17v14h-3.4z";
 const NEXT_PATH = "M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z";
 const BACK10_PATH = "M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z";
 const FWD10_PATH = "M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z";
+/** Where a touch falls along a bar (0..1). The phone fullscreen fallback rotates the player 90°, so the bar runs top→bottom. */
+function alongBar(rect: DOMRect, x: number, y: number): number {
+  const f = rect.height > rect.width ? (y - rect.top) / rect.height : (x - rect.left) / rect.width;
+  return Math.min(1, Math.max(0, f));
+}
 /** Two taps closer than this on a phone = seek 10s (like YouTube) instead of showing/hiding the controls */
 const DOUBLE_TAP_MS = 280;
 const VOL_PATH =
@@ -238,10 +243,12 @@ export function VideoDock() {
     else router.push(`/watch/${encodeURIComponent(next.id)}`);
   };
 
+  // Ask the player itself, not our state: after a jump or a tab switch the two can disagree
   const togglePlay = () => {
     const p = playerRef.current;
     if (!p?.getPlayerState) return;
-    if (isPlaying) {
+    const st = p.getPlayerState();
+    if (st === YTPlayerState.PLAYING || st === YTPlayerState.BUFFERING) {
       p.pauseVideo();
       updatePlaybackState({ playing: false });
     } else {
@@ -275,7 +282,9 @@ export function VideoDock() {
       tap.timer = null;
       tap.at = 0;
       const box = e.currentTarget.getBoundingClientRect();
-      seekBy(e.clientX - box.left < box.width / 2 ? -10 : 10);
+      const rotated = !!dockRef.current?.classList.contains("is-full") && box.height > box.width;
+      const firstHalf = rotated ? e.clientY - box.top < box.height / 2 : e.clientX - box.left < box.width / 2;
+      seekBy(firstHalf ? -10 : 10);
       return;
     }
     tap.at = now;
@@ -363,6 +372,7 @@ export function VideoDock() {
           onStateChange: (e) => {
             const st = e.data;
             if (st === YTPlayerState.PLAYING) setShowCover(false);
+            else if (st === -1 || st === 5) setShowCover(true); // unstarted / cued: YouTube shows its own poster + button
             if (st === YTPlayerState.ENDED) {
               setShowCover(true);
               handleEndedRef.current(p);
@@ -438,10 +448,13 @@ export function VideoDock() {
       const buf = p.getVideoLoadedFraction?.() || 0;
 
       if (!isSeeking) {
+        const st = p.getPlayerState?.();
         updatePlaybackState({
           currentTime: t,
           duration: d,
           buffered: buf,
+          // keep our play/pause icon honest even if a state event was missed
+          ...(st === YTPlayerState.PLAYING || st === YTPlayerState.PAUSED ? { playing: st === YTPlayerState.PLAYING } : {}),
         });
       }
 
@@ -561,10 +574,17 @@ export function VideoDock() {
   const toggleFullscreen = () => {
     const next = !isFullscreen;
     setIsFullscreen(next);
+    const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
     if (next) {
-      dockRef.current?.requestFullscreen?.().catch(() => {});
-    } else if (document.fullscreenElement) {
-      document.exitFullscreen?.().catch(() => {});
+      dockRef.current
+        ?.requestFullscreen?.()
+        .then(() => orientation?.lock?.("landscape"))
+        .catch(() => {});
+    } else {
+      try {
+        orientation?.unlock?.();
+      } catch {}
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     }
     wakeControls();
   };
@@ -592,14 +612,14 @@ export function VideoDock() {
     setIsSeeking(true);
     progRef.current.setPointerCapture(e.pointerId);
     const rect = progRef.current.getBoundingClientRect();
-    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    const frac = alongBar(rect, e.clientX, e.clientY);
     setSeekPreviewTime(frac * duration);
   };
 
   const handlePointerMoveSeek = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isSeeking || !progRef.current || !duration) return;
     const rect = progRef.current.getBoundingClientRect();
-    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    const frac = alongBar(rect, e.clientX, e.clientY);
     setSeekPreviewTime(frac * duration);
   };
 
@@ -617,15 +637,9 @@ export function VideoDock() {
       ? [...chapters].reverse().find((c) => c.t <= effectiveTime)
       : null;
 
+  // Fullscreen sizing lives in CSS (.dock.is-full), so phones can rotate it sideways when real fullscreen isn't allowed
   const dockStyle: React.CSSProperties = isFullscreen
-    ? {
-        position: "fixed",
-        inset: 0,
-        width: "100vw",
-        height: "100vh",
-        zIndex: 90,
-        borderRadius: 0,
-      }
+    ? {}
     : isMini
       ? {}
       : boxPosition
@@ -645,7 +659,7 @@ export function VideoDock() {
         hidden={!currentVideo}
         className={`dock ${isMini ? "mini" : ""} ${
           controlsVisible ? "ctl-on" : ""
-        } ${!isPlaying ? "is-paused" : ""}`}
+        } ${!isPlaying ? "is-paused" : ""} ${isFullscreen ? "is-full" : ""}`}
         style={dockStyle}
         onPointerMove={wakeControls}
         onPointerLeave={() => {
@@ -687,19 +701,18 @@ export function VideoDock() {
           </span>
         </div>
 
-        {/* Phones: big middle controls like YouTube (back 10s · play/pause · next) */}
+        {/* Phones: middle controls like YouTube (back 10s · play/pause · forward 10s); "next" lives in the bottom bar */}
         <div className="dock-mid" dir="ltr">
-          <button type="button" aria-label="رجّع ١٠ ثواني" onClick={() => { seekBy(-10); wakeControls(); }}>
+          <button type="button" className="mid-skip" aria-label="رجّع ١٠ ثواني" onClick={() => { seekBy(-10); wakeControls(); }}>
             <svg viewBox="0 0 24 24"><path d={BACK10_PATH} /></svg>
+            <b>10</b>
           </button>
           <button type="button" className="mid-play" aria-label={isPlaying ? "إيقاف" : "تشغيل"} onClick={() => { togglePlay(); wakeControls(); }}>
             <svg viewBox="0 0 24 24"><path d={isPlaying ? PAUSE_PATH : PLAY_PATH} /></svg>
           </button>
-          <button type="button" aria-label="قدّم ١٠ ثواني" onClick={() => { seekBy(10); wakeControls(); }}>
+          <button type="button" className="mid-skip" aria-label="قدّم ١٠ ثواني" onClick={() => { seekBy(10); wakeControls(); }}>
             <svg viewBox="0 0 24 24"><path d={FWD10_PATH} /></svg>
-          </button>
-          <button type="button" className="mid-next" aria-label="الفيديو اللي بعده" onClick={skipToNext}>
-            <svg viewBox="0 0 24 24"><path d={NEXT_PATH} /></svg>
+            <b>10</b>
           </button>
         </div>
 

@@ -267,6 +267,11 @@ body.ob-open { overflow: hidden; }
 .dock.is-full, .dock:fullscreen { position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important;
   z-index: 1000; border-radius: 0; }
 html.nt-full, html.nt-full body { overflow: hidden; }
+/* الآيفون ما بيسمحش للمواقع بملء الشاشة الحقيقي: لو الموبايل واقف، بنلف المشغّل نفسه بالعرض زي يوتيوب */
+@media (orientation: portrait) and (hover: none) {
+  .dock.is-full:not(:fullscreen) { inset: auto !important; top: 0 !important; left: 100vw !important;
+    width: 100dvh !important; height: 100vw !important; transform-origin: top left; transform: rotate(90deg); }
+}
 
 /* ---------- سؤال صغير بعد الفيديو (ask.js) ---------- */
 .ask { background: var(--panel); border: 1px solid rgba(210, 159, 34, .35); border-radius: 14px; padding: 16px; margin: 12px 0;
@@ -1270,32 +1275,37 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
 }
 
 /* =====================================================================
-   تحكم الموبايل في نص الفيديو زي يوتيوب: رجّع ١٠ · تشغيل/إيقاف · قدّم ١٠ · اللي بعده.
-   بيظهر مع شريط التحكم (لمسة تظهره ولمسة تخفيه)، وعلى الكمبيوتر مش موجود.
+   تحكم الموبايل في نص الفيديو بهوية الموقع: رجّع ١٠ · تشغيل/إيقاف · قدّم ١٠ — متماثلين في النص بالظبط.
+   لمسة تظهرهم مع تعتيم نبيتي خفيف، ولمسة تخفيهم. "اللي بعده" في الشريط اللي تحت. على الكمبيوتر مش موجودين.
    ===================================================================== */
-.dock-mid { position: absolute; inset: 0; z-index: 3; display: none; align-items: center; justify-content: center; gap: 22px;
-  pointer-events: none; opacity: 0; transition: opacity .35s var(--ease); }
-.dock-mid button { pointer-events: auto; width: 46px; height: 46px; display: grid; place-items: center; border: 0; border-radius: 50%;
-  color: #fff; background: rgba(0, 0, 0, .38); cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.dock-mid button svg { width: 24px; height: 24px; fill: currentColor; }
-.dock-mid .mid-play { width: 62px; height: 62px; background: rgba(93, 0, 24, .88); border: 1.5px solid rgba(210, 159, 34, .8); color: var(--gold); }
-.dock-mid .mid-play svg { width: 30px; height: 30px; }
+.dock-mid { position: absolute; inset: 0; z-index: 3; display: none; align-items: center; justify-content: center; gap: 34px;
+  pointer-events: none; opacity: 0; transition: opacity .3s var(--ease);
+  background: radial-gradient(ellipse at center, rgba(40, 4, 16, .55) 0%, rgba(10, 8, 11, .35) 60%, rgba(10, 8, 11, .2) 100%); }
+.dock-mid button { pointer-events: auto; position: relative; display: grid; place-items: center; border: 0; padding: 0; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; transition: transform .15s var(--ease); }
+.dock-mid button:active { transform: scale(.92); }
+.dock-mid .mid-skip { width: 48px; height: 48px; border-radius: 50%; background: none; color: #f4efe4; }
+.dock-mid .mid-skip svg { width: 34px; height: 34px; fill: currentColor; opacity: .92; }
+.dock-mid .mid-skip b { position: absolute; top: 55%; left: 50%; transform: translate(-50%, -50%); font: 700 10px/1 Roboto, sans-serif; color: #f4efe4; }
+.dock-mid .mid-play { width: 72px; height: 72px; border-radius: 50%; color: var(--gold);
+  background: radial-gradient(circle at 35% 30%, #7a0a26 0%, #4f0c1f 70%); border: 1.5px solid rgba(214, 176, 98, .85);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .08); }
+.dock-mid .mid-play svg { width: 32px; height: 32px; fill: currentColor; }
 @media (hover: none), (pointer: coarse) {
   .dock:not(.mini) .dock-mid { display: flex; }
   .dock.ctl-on .dock-mid, .dock.is-paused .dock-mid { opacity: 1; }
   .dock:not(.ctl-on):not(.is-paused) .dock-mid button { pointer-events: none; }
   .dock-tap .tap-big { display: none; }
-  /* لما تقف، يفضل باين آخر مشهد بدل صورة الغلاف، مع تعتيم خفيف تحت الأزرار */
-  .dock.is-paused .dock-video::after { content: ""; position: absolute; inset: 0; z-index: 1; background: rgba(0, 0, 0, .35); pointer-events: none; }
 }
 @media (max-width: 420px) {
-  .dock-mid { gap: 14px; }
-  .dock-mid button { width: 42px; height: 42px; }
-  .dock-mid .mid-play { width: 56px; height: 56px; }
+  .dock-mid { gap: 26px; }
+  .dock-mid .mid-play { width: 64px; height: 64px; }
+  .dock-mid .mid-play svg { width: 28px; height: 28px; }
 }
-/* شريط التحكم تحت على الموبايل: من غير التكرار (التشغيل واللي بعده في النص) ومن غير الصوت والمسرح، والوقت في سطر واحد */
+/* شريط التحكم تحت على الموبايل: التشغيل في النص، والصوت والمسرح مش لازمين؛ "اللي بعده" جنب الوقت */
 @media (hover: none), (pointer: coarse) {
-  .ctl-row > button:first-child, .ctl-row .ctl-next, .ctl-volbox, .ctl-row button[title="وضع المسرح"] { display: none; }
+  .ctl-row > button:first-child, .ctl-volbox, .ctl-row button[title="وضع المسرح"] { display: none; }
+  .ctl-row .ctl-next { order: -1; margin-right: 2px; }
   .ctl-time { white-space: nowrap; margin-left: 4px; }
   .ctl-chap { display: none; }
 }
