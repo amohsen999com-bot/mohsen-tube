@@ -11,7 +11,7 @@ services:
       mkdir -p data &&
       curl -fL "https://github.com/${RENDER_GIT_REPO_SLUG}/releases/download/db-v1/mohsen.db" -o data/mohsen.db &&
       npm ci && npm run build
-    startCommand: npm start -- --port $PORT
+    startCommand: npx next start --port $PORT
     healthCheckPath: /
     envVars:
       - key: NODE_VERSION
