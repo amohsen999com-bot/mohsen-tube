@@ -152,20 +152,8 @@ export function getFeedVideos(options: {
   const offset = Math.max(options.offset || 0, 0);
 
   if (options.category === "fun") {
-    const whereClause = `is_curated = 1 AND (g IN ('اصنعها بنفسك', 'رياضة') OR (g = 'بودكاست' AND tp != 'بيزنس'))`;
-    const totalRow = db
-      .prepare(`SELECT COUNT(*) as cnt FROM videos WHERE ${whereClause}`)
-      .get() as { cnt: number };
-    const rows = db
-      .prepare(
-        `SELECT ${VIDEO_COLS}
-         FROM videos
-         WHERE ${whereClause}
-         ORDER BY (0.3 * COALESCE(dt, 20200101) / 20261231.0 + 0.25 * hd + 0.25 * COALESCE(q, 0.4) + 0.2 * COALESCE(s, r)) DESC
-         LIMIT ? OFFSET ?`
-      )
-      .all(limit, offset) as unknown as RawVideoRow[];
-    return { videos: rows.map(mapRowToVideo), total: totalRow.cnt };
+    const videos = getFunPool();
+    return { videos: videos.slice(offset, offset + limit), total: videos.length };
   }
 
   if (options.topic) {
@@ -202,6 +190,51 @@ export function getFeedVideos(options: {
     .all(limit, offset) as unknown as RawVideoRow[];
 
   return { videos: rows.map(mapRowToVideo), total: totalRow.cnt };
+}
+
+/**
+ * مخزون صفحة الترفيه: متعة بتفيد. كل نوع ليه سقف عشان الكورة متاكلش الصفحة:
+ * حِرف واختراعات وطبخ وزراعة كلها، حكايات (بودكاست + قصص السيرة القصيرة)، دقايق رقائق قصيرة،
+ * مهارات في ربع ساعة، ورياضة بسقف صغير. الترتيب والتوزيع على الرفوف بيحصل عند المستخدم.
+ */
+// الترفيه مش مكان أخبار وسياسة ومناظرات: أي عنوان فيه الكلام ده بيتشال من رفوف الدين هنا
+const NO_NEWS = ["غزة", "هدنة", "سياس", "انتخاب", "الرئيس", "الحكومة", "حرب", "إسرائيل", "الشيعة", "شيعي", "الدحيح"]
+  .map((w) => `t NOT LIKE '%${w}%'`)
+  .join(" AND ");
+const FUN_BUCKETS: Array<{ where: string; limit: number }> = [
+  { where: `g = 'اصنعها بنفسك'`, limit: 400 },
+  { where: `g = 'بودكاست' AND tp != 'بيزنس'`, limit: 80 },
+  { where: `g IN ('علماء', 'أنا السلفي') AND tp = 'سيرة وتاريخ' AND d BETWEEN 180 AND 1500 AND ${NO_NEWS}`, limit: 160 },
+  { where: `g IN ('علماء', 'أنا السلفي') AND tp = 'رقائق' AND d BETWEEN 120 AND 1080 AND ${NO_NEWS}`, limit: 90 },
+  { where: `g = 'كورسات' AND tp IN ('تصميم', 'تصوير', 'خط عربي', 'مونتاج', 'ذكاء اصطناعي', 'إكسل وأوفيس') AND d BETWEEN 120 AND 960`, limit: 120 },
+  { where: `g = 'رياضة'`, limit: 40 },
+];
+// قصص وحكايات بتشد أكتر من المناظرات والردود، فبنقدّمها جوه نفس النوع
+const STORY_BOOST = `(CASE WHEN t LIKE '%قصة%' OR t LIKE '%قصص%' OR t LIKE '%حكاية%' OR t LIKE '%سيرة%' THEN 0.25 ELSE 0 END)`;
+let funCache: VideoItem[] | null = null;
+
+export function getFunPool(): VideoItem[] {
+  if (funCache) return funCache;
+  const db = getDb();
+  const seen = new Set<string>();
+  const out: VideoItem[] = [];
+  for (const b of FUN_BUCKETS) {
+    const rows = db
+      .prepare(
+        `SELECT ${VIDEO_COLS} FROM videos
+         WHERE is_curated = 1 AND (${b.where})
+         ORDER BY (0.4 * COALESCE(s, r) + 0.25 * COALESCE(q, 0.4) + 0.15 * hd + 0.2 * COALESCE(dt, 20200101) / 20261231.0 + ${STORY_BOOST}) DESC
+         LIMIT ?`
+      )
+      .all(b.limit) as unknown as RawVideoRow[];
+    for (const r of rows) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      out.push(mapRowToVideo(r));
+    }
+  }
+  funCache = out;
+  return out;
 }
 
 export function getVideosByIds(ids: string[]): VideoItem[] {

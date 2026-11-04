@@ -123,12 +123,18 @@ describe("SQLite + FTS5 Catalog & Search Engine", () => {
 
     const fun = getFeedVideos({ category: "fun", limit: 24, offset: 0 });
     assert.equal(fun.videos.length, 24);
-    assert.ok(
-      fun.videos.every(
-        (v) =>
-          v.g === "اصنعها بنفسك" || v.g === "رياضة" || v.g === "بودكاست"
-      )
-    );
+    const FUN_GROUPS = ["اصنعها بنفسك", "رياضة", "بودكاست", "علماء", "أنا السلفي", "كورسات"];
+    assert.ok(fun.videos.every((v) => FUN_GROUPS.includes(v.g)));
+  });
+
+  it("keeps the fun pool varied: sports capped, crafts lead, stories and short skills present", () => {
+    const all = getFeedVideos({ category: "fun", limit: 1500, offset: 0 }).videos;
+    const by = (p: (v: (typeof all)[number]) => boolean) => all.filter(p).length;
+    assert.ok(by((v) => v.g === "رياضة") <= 40, "sports must stay a small slice");
+    assert.ok(by((v) => v.g === "اصنعها بنفسك") > by((v) => v.g === "رياضة") * 5);
+    assert.ok(by((v) => v.tp === "سيرة وتاريخ") > 0, "faith stories belong in the fun pool");
+    assert.ok(all.filter((v) => v.g === "كورسات").every((v) => v.d <= 960), "only short skills");
+    assert.equal(new Set(all.map((v) => v.id)).size, all.length, "no duplicates across buckets");
   });
 
   it("searches 100k+ videos with Arabic normalization, synonyms, and typo tolerance", () => {
@@ -160,26 +166,18 @@ describe("SQLite + FTS5 Catalog & Search Engine", () => {
     assert.ok(ch.videos.length > 0);
   });
 
-  it("keeps the fun category's OR clause inside is_curated (SQL precedence)", () => {
+  it("keeps the fun pool inside the curated catalog", () => {
     const fun = getFeedVideos({ category: "fun", limit: 1500, offset: 0 });
     assert.ok(fun.videos.length > 0);
     assert.ok(fun.videos.every((v) => !(v.g === "بودكاست" && v.tp === "بيزنس")));
     const db = getDb();
+    const ids = fun.videos.map((v) => v.id);
     const uncurated = (
       db
-        .prepare(
-          `SELECT COUNT(*) AS n FROM videos WHERE is_curated = 0 AND (g IN ('اصنعها بنفسك', 'رياضة') OR (g = 'بودكاست' AND tp != 'بيزنس'))`
-        )
-        .get() as { n: number }
+        .prepare(`SELECT COUNT(*) AS n FROM videos WHERE is_curated = 0 AND id IN (${ids.map(() => "?").join(",")})`)
+        .get(...ids) as { n: number }
     ).n;
-    const curated = (
-      db
-        .prepare(
-          `SELECT COUNT(*) AS n FROM videos WHERE is_curated = 1 AND (g IN ('اصنعها بنفسك', 'رياضة') OR (g = 'بودكاست' AND tp != 'بيزنس'))`
-        )
-        .get() as { n: number }
-    ).n;
-    assert.equal(fun.total, curated, `fun total must not include ${uncurated} uncurated rows`);
+    assert.equal(uncurated, 0);
   });
 
   it("serves a related graph for history ids, falling back to content-based lists", () => {
