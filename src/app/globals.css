@@ -1155,22 +1155,18 @@ body.hdr-hide .chips-bar { top: 0; }
 }
 
 /* =====================================================================
-   اللوجو: مربع نبيتي هادي وزرار تشغيل دهبي + اسم بخط كوفي، والكلمتين بنفس العرض. من غير حركة.
+   اللوجو: مربع نبيتي هادي وزرار تشغيل دهبي + الاسم في سطر واحد بخط عريض مضغوط (زي شعارات المنصات الكبيرة).
    ===================================================================== */
-.logo { gap: 11px; font-family: "Reem Kufi", "Noto Sans Arabic", sans-serif; }
-.logo-mark { width: 40px; height: 40px; border: 0; border-radius: 0; background: none; display: block; flex: none;
+.logo { gap: 8px; font-family: "Cairo", "Noto Sans Arabic", sans-serif; }
+.logo-mark { width: 38px; height: 38px; border: 0; border-radius: 0; background: none; display: block; flex: none;
   filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .35)); }
-.logo-txt { display: flex; flex-direction: column; align-items: stretch; line-height: .92; gap: 0; }
-.logo-txt b { display: block; font-weight: 700; letter-spacing: 0; white-space: nowrap; }
-.logo-txt b:first-child { font-size: 17px; color: #f4efe4; }
-/* "تيوب" أقصر من "محسن" في الخط ده، فبنكبّرها شوية عشان الكلمتين ياخدوا نفس العرض بالظبط */
-.logo-txt b:last-child { font-size: 19.4px; margin-top: 1px; padding-bottom: 4px; line-height: 1.1;
-  background: linear-gradient(180deg, #f6e2a4 0%, #e2b54a 55%, #b8811a 100%);
-  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.logo-txt { display: flex; flex-direction: row; align-items: center; gap: 4px; font-size: 22px; line-height: 1; letter-spacing: -.4px; }
+.logo-txt b { font-weight: 800; white-space: nowrap; }
+.logo-txt b:first-child { color: #f4efe4; }
+.logo-txt b:last-child { color: #e2b54a; }
 @media (max-width: 860px) {
-  .logo-mark { width: 36px; height: 36px; }
-  .logo-txt b:first-child { font-size: 15px; }
-  .logo-txt b:last-child { font-size: 17.1px; }
+  .logo-mark { width: 34px; height: 34px; }
+  .logo-txt { font-size: 19px; }
 }
 
 /* =====================================================================
