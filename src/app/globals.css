@@ -1268,3 +1268,34 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
   .shelf-arrow { display: none; }
   .shelf-row { grid-auto-columns: 78%; gap: 12px; }
 }
+
+/* =====================================================================
+   تحكم الموبايل في نص الفيديو زي يوتيوب: رجّع ١٠ · تشغيل/إيقاف · قدّم ١٠ · اللي بعده.
+   بيظهر مع شريط التحكم (لمسة تظهره ولمسة تخفيه)، وعلى الكمبيوتر مش موجود.
+   ===================================================================== */
+.dock-mid { position: absolute; inset: 0; z-index: 3; display: none; align-items: center; justify-content: center; gap: 22px;
+  pointer-events: none; opacity: 0; transition: opacity .35s var(--ease); }
+.dock-mid button { pointer-events: auto; width: 46px; height: 46px; display: grid; place-items: center; border: 0; border-radius: 50%;
+  color: #fff; background: rgba(0, 0, 0, .38); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.dock-mid button svg { width: 24px; height: 24px; fill: currentColor; }
+.dock-mid .mid-play { width: 62px; height: 62px; background: rgba(93, 0, 24, .88); border: 1.5px solid rgba(210, 159, 34, .8); color: var(--gold); }
+.dock-mid .mid-play svg { width: 30px; height: 30px; }
+@media (hover: none), (pointer: coarse) {
+  .dock:not(.mini) .dock-mid { display: flex; }
+  .dock.ctl-on .dock-mid, .dock.is-paused .dock-mid { opacity: 1; }
+  .dock:not(.ctl-on):not(.is-paused) .dock-mid button { pointer-events: none; }
+  .dock-tap .tap-big { display: none; }
+  /* لما تقف، يفضل باين آخر مشهد بدل صورة الغلاف، مع تعتيم خفيف تحت الأزرار */
+  .dock.is-paused .dock-video::after { content: ""; position: absolute; inset: 0; z-index: 1; background: rgba(0, 0, 0, .35); pointer-events: none; }
+}
+@media (max-width: 420px) {
+  .dock-mid { gap: 14px; }
+  .dock-mid button { width: 42px; height: 42px; }
+  .dock-mid .mid-play { width: 56px; height: 56px; }
+}
+/* شريط التحكم تحت على الموبايل: من غير التكرار (التشغيل واللي بعده في النص) ومن غير الصوت والمسرح، والوقت في سطر واحد */
+@media (hover: none), (pointer: coarse) {
+  .ctl-row > button:first-child, .ctl-row .ctl-next, .ctl-volbox, .ctl-row button[title="وضع المسرح"] { display: none; }
+  .ctl-time { white-space: nowrap; margin-left: 4px; }
+  .ctl-chap { display: none; }
+}

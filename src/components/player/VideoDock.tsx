@@ -21,6 +21,11 @@ import { formatDuration } from "@/lib/arabic";
 const PLAY_PATH =
   "M8 5.2v13.6c0 .8.9 1.3 1.6.8l10.3-6.8c.6-.4.6-1.2 0-1.6L9.6 4.4C8.9 3.9 8 4.4 8 5.2z";
 const PAUSE_PATH = "M7 5h3.4v14H7zM13.6 5H17v14h-3.4z";
+const NEXT_PATH = "M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z";
+const BACK10_PATH = "M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z";
+const FWD10_PATH = "M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z";
+/** Two taps closer than this on a phone = seek 10s (like YouTube) instead of showing/hiding the controls */
+const DOUBLE_TAP_MS = 280;
 const VOL_PATH =
   "M4 9.5v5h3.5L12 19V5L7.5 9.5H4zm11.5 2.5a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM13 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z";
 const MUTE_PATH =
@@ -71,6 +76,8 @@ export function VideoDock() {
   const playerRef = useRef<YTPlayerInstance | null>(null);
 
   const [controlsVisible, setControlsVisible] = useState(true);
+  /** Cover image only until the first frame plays and after the end; a normal pause keeps the frozen frame */
+  const [showCover, setShowCover] = useState(true);
   const [volume, setVolume] = useState(100);
   const [isMuted, setIsMuted] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -220,6 +227,70 @@ export function VideoDock() {
   const handleEndedRef = useRef(handleEnded);
   handleEndedRef.current = handleEnded;
 
+  // "اللي بعده" by hand: same order the auto-play uses (queue, then series next / first suggestion)
+  const skipToNext = () => {
+    const next = ClientStore.shiftQueue() || upNextRef.current;
+    if (!next || next.id === currentVideoRef.current?.id) {
+      showToast("مفيش فيديو بعده دلوقتي");
+      return;
+    }
+    if (isMiniRef.current) playVideo(next);
+    else router.push(`/watch/${encodeURIComponent(next.id)}`);
+  };
+
+  const togglePlay = () => {
+    const p = playerRef.current;
+    if (!p?.getPlayerState) return;
+    if (isPlaying) {
+      p.pauseVideo();
+      updatePlaybackState({ playing: false });
+    } else {
+      p.playVideo();
+      updatePlaybackState({ playing: true });
+    }
+  };
+
+  const seekBy = (delta: number) => {
+    const p = playerRef.current;
+    if (!p?.getCurrentTime) return;
+    const t = Math.max(0, p.getCurrentTime() + delta);
+    p.seekTo(t, true);
+    showToast(delta > 0 ? "+١٠ ثواني" : "−١٠ ثواني", 900);
+  };
+
+  // Phones: a tap shows/hides the controls (it never pauses by itself), a double tap on a side seeks 10s.
+  // Mouse: a click still plays/pauses, like before.
+  const pointerTypeRef = useRef("mouse");
+  const lastTapRef = useRef<{ at: number; timer: ReturnType<typeof setTimeout> | null }>({ at: 0, timer: null });
+  const onVideoTap = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (pointerTypeRef.current === "mouse") {
+      togglePlay();
+      wakeControls();
+      return;
+    }
+    const tap = lastTapRef.current;
+    const now = Date.now();
+    if (now - tap.at < DOUBLE_TAP_MS) {
+      if (tap.timer) clearTimeout(tap.timer);
+      tap.timer = null;
+      tap.at = 0;
+      const box = e.currentTarget.getBoundingClientRect();
+      seekBy(e.clientX - box.left < box.width / 2 ? -10 : 10);
+      return;
+    }
+    tap.at = now;
+    const wasVisible = controlsVisible;
+    tap.timer = setTimeout(() => {
+      tap.timer = null;
+      if (wasVisible && isPlaying) {
+        if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+        setControlsVisible(false);
+      } else {
+        wakeControls();
+      }
+    }, DOUBLE_TAP_MS);
+  };
+
   // One player for the whole session: created once, then every new video is swapped in with
   // loadVideoById, so switching (including auto-advance) never shows a black frame or YouTube's UI.
   useEffect(() => {
@@ -227,6 +298,7 @@ export function VideoDock() {
     if (!video || !iframeHostRef.current) return;
 
     setIsLiked(ClientStore.hasInList("liked", video.id));
+    setShowCover(true);
     setSpeed(ClientStore.getSpeedForChannel(video.c));
     speedAppliedRef.current = false;
     const startSec = startFor(video);
@@ -290,7 +362,9 @@ export function VideoDock() {
           },
           onStateChange: (e) => {
             const st = e.data;
+            if (st === YTPlayerState.PLAYING) setShowCover(false);
             if (st === YTPlayerState.ENDED) {
+              setShowCover(true);
               handleEndedRef.current(p);
               if (isLoopRef.current) return;
             }
@@ -582,8 +656,8 @@ export function VideoDock() {
           {/* Overscan crop wrapper hides YouTube top title bar and bottom watermark */}
           <div ref={iframeHostRef} className="yt-crop-mask" />
 
-          {/* Thumbnail shield covers YouTube pause cards, watermark, and end-screens whenever not actively playing */}
-          {currentVideo && !isPlaying && (
+          {/* Thumbnail shield covers YouTube's loading frame and end-screens (before the first frame and after the end) */}
+          {currentVideo && !isPlaying && showCover && (
             <div
               className="yt-brand-shield"
               style={{
@@ -598,25 +672,35 @@ export function VideoDock() {
         {/* Center tap area + wine-and-gold play indicator */}
         <div
           className={`dock-tap ${!isPlaying ? "paused" : ""}`}
-          onClick={() => {
-            const p = playerRef.current;
-            if (!p?.getPlayerState) return;
-            if (isPlaying) {
-              p.pauseVideo();
-              updatePlaybackState({ playing: false });
-            } else {
-              p.playVideo();
-              updatePlaybackState({ playing: true });
-            }
-            wakeControls();
+          onPointerDown={(e) => {
+            pointerTypeRef.current = e.pointerType || "mouse";
           }}
-          onDoubleClick={toggleFullscreen}
+          onClick={onVideoTap}
+          onDoubleClick={() => {
+            if (pointerTypeRef.current === "mouse") toggleFullscreen();
+          }}
         >
           <span className="tap-big" aria-hidden="true">
             <svg className="tap-ico" viewBox="0 0 24 24">
               <path d={PLAY_PATH} />
             </svg>
           </span>
+        </div>
+
+        {/* Phones: big middle controls like YouTube (back 10s · play/pause · next) */}
+        <div className="dock-mid" dir="ltr">
+          <button type="button" aria-label="رجّع ١٠ ثواني" onClick={() => { seekBy(-10); wakeControls(); }}>
+            <svg viewBox="0 0 24 24"><path d={BACK10_PATH} /></svg>
+          </button>
+          <button type="button" className="mid-play" aria-label={isPlaying ? "إيقاف" : "تشغيل"} onClick={() => { togglePlay(); wakeControls(); }}>
+            <svg viewBox="0 0 24 24"><path d={isPlaying ? PAUSE_PATH : PLAY_PATH} /></svg>
+          </button>
+          <button type="button" aria-label="قدّم ١٠ ثواني" onClick={() => { seekBy(10); wakeControls(); }}>
+            <svg viewBox="0 0 24 24"><path d={FWD10_PATH} /></svg>
+          </button>
+          <button type="button" className="mid-next" aria-label="الفيديو اللي بعده" onClick={skipToNext}>
+            <svg viewBox="0 0 24 24"><path d={NEXT_PATH} /></svg>
+          </button>
         </div>
 
         {/* Custom Wine & Gold Control Bar */}
@@ -649,20 +733,16 @@ export function VideoDock() {
             <button
               type="button"
               aria-label="تشغيل/إيقاف"
-              onClick={() => {
-                const p = playerRef.current;
-                if (!p) return;
-                if (isPlaying) {
-                  p.pauseVideo();
-                  updatePlaybackState({ playing: false });
-                } else {
-                  p.playVideo();
-                  updatePlaybackState({ playing: true });
-                }
-              }}
+              onClick={togglePlay}
             >
               <svg viewBox="0 0 24 24">
                 <path d={isPlaying ? PAUSE_PATH : PLAY_PATH} />
+              </svg>
+            </button>
+
+            <button type="button" className="ctl-next" aria-label="الفيديو اللي بعده" title="الفيديو اللي بعده" onClick={skipToNext}>
+              <svg viewBox="0 0 24 24">
+                <path d={NEXT_PATH} />
               </svg>
             </button>
 
