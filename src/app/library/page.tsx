@@ -134,10 +134,48 @@ export default function LibraryPage() {
         )}
       </section>
 
-      {/* Saved Clips */}
-      {clips.length > 0 && (
-        <section style={{ marginBottom: 28 }}>
+      {/* Saved Clips: play, copy a share link, delete; and keep them as a file on the device */}
+      <section style={{ marginBottom: 28 }}>
+        <div className="clips-head">
           <h2 className="sec">مقاطعك ({clips.length})</h2>
+          <div className="clips-file">
+            <button
+              type="button"
+              className="btn"
+              disabled={!clips.length}
+              onClick={() => {
+                const blob = new Blob([ClientStore.exportClips()], { type: "application/json" });
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = `مقاطع-محسن-تيوب-${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+                showToast("نزل ملف مقاطعك على جهازك");
+              }}
+            >
+              ⬇ نزّل مقاطعك
+            </button>
+            <label className="btn">
+              ⬆ ارفع ملف مقاطع
+              <input
+                type="file"
+                accept="application/json,.json"
+                hidden
+                onChange={async (ev) => {
+                  const file = ev.target.files?.[0];
+                  ev.target.value = "";
+                  if (!file) return;
+                  const n = ClientStore.importClips(await file.text());
+                  setClips(ClientStore.getClips());
+                  showToast(n < 0 ? "الملف ده مش ملف مقاطع من محسن تيوب" : n ? `اتضاف ${n} مقطع` : "المقاطع دي موجودة عندك أصلًا");
+                }}
+              />
+            </label>
+          </div>
+        </div>
+        {clips.length === 0 ? (
+          <p className="muted">لسه ما حفظتش مقاطع. افتح أي فيديو واضغط "قص".</p>
+        ) : (
           <div className="grid">
             {clips.map((c) => (
               <div key={c.id} className="series">
@@ -145,17 +183,30 @@ export default function LibraryPage() {
                 <p className="muted" style={{ margin: "4px 0 10px" }}>
                   {c.c} • من {formatDuration(c.s)} إلى {formatDuration(c.e)}
                 </p>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <Link
-                    className="btn gold"
-                    href={`/watch/${c.vid}?s=${c.s}&e=${c.e}`}
-                  >
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <Link className="btn gold" href={`/watch/${c.vid}?s=${c.s}&e=${c.e}`}>
                     ▶ شغّل المقطع
                   </Link>
                   <button
                     type="button"
                     className="btn"
-                    onClick={() => ClientStore.deleteClip(c.id)}
+                    onClick={() => {
+                      const url = `${window.location.origin}/watch/${encodeURIComponent(c.vid)}?s=${c.s}&e=${c.e}`;
+                      navigator.clipboard
+                        ?.writeText(url)
+                        .then(() => showToast("اتنسخ رابط المقطع"))
+                        .catch(() => showToast(url, 6000));
+                    }}
+                  >
+                    🔗 انسخ الرابط
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      ClientStore.deleteClip(c.id);
+                      setClips(ClientStore.getClips());
+                    }}
                   >
                     حذف
                   </button>
@@ -163,8 +214,8 @@ export default function LibraryPage() {
               </div>
             ))}
           </div>
-        </section>
-      )}
+        )}
+      </section>
 
       {/* Watch History */}
       <section style={{ marginBottom: 28 }}>

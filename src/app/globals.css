@@ -1381,3 +1381,10 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
 @media (hover: none), (pointer: coarse) {
   .yt-fs { right: auto; left: 6px; bottom: 2px; width: 44px; height: 40px; z-index: 6; background: rgba(12, 10, 13, .88); }
 }
+
+/* المكتبة: عنوان "مقاطعك" وجنبه نزّل/ارفع ملف المقاطع */
+.clips-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.clips-head .sec { margin: 0; }
+.clips-file { display: flex; gap: 8px; flex-wrap: wrap; }
+.clips-file .btn { height: 36px; display: inline-flex; align-items: center; cursor: pointer; }
+.clips-file .btn:disabled { opacity: .45; cursor: default; }

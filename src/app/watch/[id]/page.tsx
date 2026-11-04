@@ -277,6 +277,13 @@ export default function WatchPage({
               seekTo(s);
             }}
             onSave={handleSaveClip}
+            onCopyLink={(s, e) => {
+              const url = `${window.location.origin}/watch/${encodeURIComponent(video.id)}?s=${s}&e=${e}`;
+              navigator.clipboard
+                ?.writeText(url)
+                .then(() => showToast("اتنسخ رابط المقطع، ابعته لأي حد"))
+                .catch(() => showToast(url, 6000));
+            }}
             onClose={() => {
               setClipPanelOpen(false);
               setClipRange(null);

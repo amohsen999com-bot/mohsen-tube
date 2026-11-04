@@ -214,6 +214,43 @@ export const ClientStore = {
     return item;
   },
 
+  /** Clips as a small JSON file the viewer can keep on the device and load back anywhere */
+  exportClips(): string {
+    return JSON.stringify({ app: "mohsen-tube", kind: "clips", v: 1, clips: this.getClips() }, null, 2);
+  },
+
+  /** Loads clips from an exported file (merged by id, invalid entries skipped). Returns how many were added, or -1 if the file isn't ours. */
+  importClips(text: string): number {
+    let data: unknown;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return -1;
+    }
+    const raw = (data as { kind?: string; clips?: unknown })?.kind === "clips" ? (data as { clips: unknown }).clips : null;
+    if (!Array.isArray(raw)) return -1;
+    const valid = raw.filter(
+      (c): c is SavedClip =>
+        !!c &&
+        typeof c.vid === "string" && /^[A-Za-z0-9_-]{6,20}$/.test(c.vid) &&
+        Number.isFinite(c.s) && Number.isFinite(c.e) && c.e > c.s &&
+        typeof c.name === "string"
+    ).map((c) => ({
+      id: `${c.vid}_${Math.floor(c.s)}_${Math.floor(c.e)}`,
+      vid: c.vid,
+      t: String(c.t || "").slice(0, 200),
+      c: String(c.c || "").slice(0, 120),
+      s: Math.floor(c.s),
+      e: Math.floor(c.e),
+      name: c.name.slice(0, 80),
+      at: Number(c.at) || Date.now(),
+    }));
+    const have = new Set(this.getClips().map((c) => c.id));
+    const added = valid.filter((c) => !have.has(c.id));
+    writeLocal("nt_clips", [...added, ...this.getClips()].slice(0, 200));
+    return added.length;
+  },
+
   deleteClip(id: string): void {
     writeLocal(
       "nt_clips",

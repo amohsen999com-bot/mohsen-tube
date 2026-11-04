@@ -18,6 +18,7 @@ export function ClipEditor({
   seekTo,
   onPreview,
   onSave,
+  onCopyLink,
   onClose,
 }: {
   duration: number;
@@ -26,6 +27,7 @@ export function ClipEditor({
   seekTo: (t: number) => void;
   onPreview: (s: number, e: number) => void;
   onSave: (s: number, e: number, name: string) => void;
+  onCopyLink: (s: number, e: number) => void;
   onClose: () => void;
 }) {
   const dmax = duration || startAt + 600;
@@ -209,6 +211,9 @@ export function ClipEditor({
         />
         <button type="button" className="btn" onClick={() => onPreview(s, e)}>
           ▶ شوف المقطع
+        </button>
+        <button type="button" className="btn" disabled={bad} onClick={() => onCopyLink(s, e)}>
+          🔗 انسخ الرابط
         </button>
         <button type="button" className="btn gold" disabled={bad} onClick={() => onSave(s, e, name)}>
           احفظ
