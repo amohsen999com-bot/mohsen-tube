@@ -1426,3 +1426,70 @@ body.hdr-hide .chips-bar { top: -80px; }
   animation: cardPop .18s var(--ease, ease) both; transform-origin: top left; }
 @keyframes cardPop { from { opacity: 0; transform: scale(.94) translateY(-4px); } to { opacity: 1; transform: none; } }
 .side-list .pop-menu.card-pop { top: 100%; }
+
+/* =====================================================================
+   صفحة القناة بترتيب يوتيوب: راس القناة، تبويبين (الفيديوهات / قوائم التشغيل)، وعرض القايمة بالترتيب
+   ===================================================================== */
+.ch-top { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px 20px; padding: 18px 0 14px; }
+.ch-avatar { width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; font-size: 40px; font-weight: 700;
+  color: var(--gold); background: radial-gradient(circle at 35% 30%, #7a0a26 0%, #4f0c1f 75%); border: 1.5px solid rgba(214, 176, 98, .5); }
+.ch-info h1 { margin: 0 0 6px; font-size: 30px; font-weight: 800; line-height: 1.25; }
+.ch-info p { margin: 0; font-size: 14.5px; }
+.ch-sub { height: 40px; padding: 0 22px; border-radius: 999px; border: 0; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+  background: var(--text); color: var(--bg); transition: background .2s, color .2s; }
+.ch-sub.on { background: rgba(255, 255, 255, .1); color: var(--text); }
+.ch-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: 6px 0 16px; }
+.ch-tabs button { position: relative; height: 46px; padding: 0 18px; border: 0; background: none; font: inherit; font-size: 16px; font-weight: 600;
+  color: var(--muted); cursor: pointer; }
+.ch-tabs button.on { color: var(--text); }
+.ch-tabs button.on::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 3px; border-radius: 3px; background: var(--gold); }
+.ch-sort { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+.ch-sort button { height: 34px; padding: 0 16px; border-radius: 10px; border: 0; font: inherit; font-size: 14px; cursor: pointer;
+  background: rgba(255, 255, 255, .07); color: var(--text); }
+.ch-sort button.on { background: var(--text); color: var(--bg); font-weight: 700; }
+
+/* كروت قوائم التشغيل: غلاف بطبقتين ورا بعض (زي يوتيوب) وعليه عدد الفيديوهات */
+.pl-card { display: flex; flex-direction: column; gap: 6px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: right; cursor: pointer; }
+.pl-thumb { position: relative; aspect-ratio: 16 / 9; border-radius: 14px; overflow: visible; margin-top: 8px; }
+.pl-thumb::before, .pl-thumb::after { content: ""; position: absolute; left: 8%; right: 8%; border-radius: 10px 10px 0 0; }
+.pl-thumb::before { top: -8px; height: 8px; background: rgba(255, 255, 255, .12); left: 12%; right: 12%; }
+.pl-thumb::after { top: -4px; height: 4px; background: rgba(255, 255, 255, .22); }
+.pl-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 14px; display: block; }
+.pl-count { position: absolute; bottom: 8px; left: 8px; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px;
+  font-size: 12.5px; font-weight: 700; color: #fff; background: rgba(0, 0, 0, .78); }
+.pl-count svg { width: 15px; height: 15px; fill: currentColor; }
+.pl-title { font-size: 15.5px; line-height: 1.45; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pl-meta { font-size: 13px; color: var(--muted); }
+.pl-card:hover .pl-title { color: var(--gold-soft); }
+
+/* القايمة مفتوحة: غلاف ومعلومات وتشغيل الكل، وجنبها الحلقات مترقّمة بالترتيب */
+.pl-view { display: grid; grid-template-columns: 340px 1fr; gap: 24px; align-items: start; }
+.pl-side { position: sticky; top: calc(var(--hdr-h, 64px) + 12px); padding: 16px; border-radius: 18px;
+  background: linear-gradient(180deg, rgba(79, 12, 31, .55), rgba(30, 27, 31, .9)); border: 1px solid rgba(214, 176, 98, .2); }
+.pl-back { border: 0; background: none; color: var(--muted); font: inherit; font-size: 14px; cursor: pointer; padding: 0; margin-bottom: 12px; }
+.pl-back:hover { color: var(--text); }
+.pl-cover { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 12px; display: block; }
+.pl-side h2 { font-size: 20px; margin: 14px 0 6px; line-height: 1.4; }
+.pl-side p { margin: 0 0 14px; font-size: 14px; }
+.pl-play { width: 100%; justify-content: center; height: 42px; display: inline-flex; align-items: center; }
+.pl-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pl-item { display: grid; grid-template-columns: 28px 168px 1fr; gap: 12px; align-items: center; padding: 6px; border-radius: 12px; color: inherit; }
+.pl-item:hover { background: rgba(255, 255, 255, .05); }
+.pl-num { text-align: center; color: var(--muted); font: 600 14px Roboto, sans-serif; }
+.pl-ithumb { position: relative; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; }
+.pl-ithumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pl-itext { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pl-itext b { font-size: 14.5px; line-height: 1.45; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pl-itext small { font-size: 12.5px; }
+
+@media (max-width: 860px) {
+  .ch-top { grid-template-columns: auto 1fr; padding-top: 10px; }
+  .ch-avatar { width: 72px; height: 72px; font-size: 30px; }
+  .ch-info h1 { font-size: 22px; }
+  .ch-sub { grid-column: 1 / -1; width: 100%; }
+  .ch-tabs { position: sticky; top: var(--hdr-h, 64px); z-index: 5; background: var(--bg); margin: 0 -16px 14px; padding: 0 16px; }
+  .ch-tabs button { flex: 1; }
+  .pl-view { grid-template-columns: 1fr; }
+  .pl-side { position: static; }
+  .pl-item { grid-template-columns: 22px 132px 1fr; gap: 10px; }
+}

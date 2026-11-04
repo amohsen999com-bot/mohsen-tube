@@ -638,12 +638,33 @@ export function getChannelPageData(channelName: string) {
     .prepare(`SELECT id, t, videos_json FROM series WHERE c = ?`)
     .all(channelName) as Array<{ id: number; t: string; videos_json: string }>;
 
-  const series: SeriesItem[] = seriesRows.map((s) => ({
-    id: s.id,
-    t: s.t,
-    v: JSON.parse(s.videos_json),
-    channel: channelName,
-  }));
+  // Playlists like YouTube's tab: only episodes that exist, a cover, total length; newest-updated first
+  const parsed = seriesRows.map((s) => ({ id: s.id, t: s.t, ids: JSON.parse(s.videos_json) as string[] }));
+  const allIds = [...new Set(parsed.flatMap((p) => p.ids))];
+  const meta = new Map<string, { d: number; dt: number }>();
+  for (let i = 0; i < allIds.length; i += 500) {
+    const chunk = allIds.slice(i, i + 500);
+    const rows = db
+      .prepare(`SELECT id, d, dt FROM videos WHERE id IN (${chunk.map(() => "?").join(",")})`)
+      .all(...chunk) as Array<{ id: string; d: number; dt: number | null }>;
+    for (const r of rows) meta.set(r.id, { d: r.d || 0, dt: r.dt || 0 });
+  }
+  const series: SeriesItem[] = parsed
+    .map((p) => {
+      const v = p.ids.filter((id) => meta.has(id));
+      return {
+        id: p.id,
+        t: p.t,
+        v,
+        channel: channelName,
+        n: v.length,
+        first: v[0],
+        dur: v.reduce((a, id) => a + (meta.get(id)?.d || 0), 0),
+        last: Math.max(0, ...v.map((id) => meta.get(id)?.dt || 0)),
+      };
+    })
+    .filter((s) => s.n >= 2)
+    .sort((a, b) => (b.last || 0) - (a.last || 0) || b.n - a.n);
 
   return {
     channel: {

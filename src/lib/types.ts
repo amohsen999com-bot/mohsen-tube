@@ -46,6 +46,11 @@ export interface SeriesItem {
   /** Ordered array of video IDs */
   v: string[];
   channel?: string;
+  /** Channel page only: episodes that exist in the catalog, cover video, total length, newest episode date */
+  n?: number;
+  first?: string;
+  dur?: number;
+  last?: number;
 }
 
 export interface CommentItem {
