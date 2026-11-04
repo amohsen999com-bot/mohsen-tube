@@ -1366,7 +1366,11 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
 .dock.yt-native .dock-video::after { display: none !important; }
 
 /* زرار "نسخ الرابط / افتح في يوتيوب" اللي تحت على الشمال جوه مشغّل يوتيوب: طبقة شفافة فوقه بتلغي لمسه */
-.yt-link-block { position: absolute; left: 0; bottom: 0; width: 60px; height: 56px; z-index: 5; }
+.yt-link-block { display: none; }
+/* على الموبايل بس (على الكمبيوتر الركن ده فيه ⚙). واطي على قد صف الزرار عشان ما يغطيش شريط التقديم اللي فوقه */
+@media (hover: none), (pointer: coarse) {
+  .dock.yt-native:not(.mini) .yt-link-block { display: block; position: absolute; left: 0; bottom: 0; width: 72px; height: 44px; z-index: 5; }
+}
 
 /* زرار ملء الشاشة بتاعنا: أقصى اليمين تحت، فوق شريط يوتيوب. بيكبّر ويلف الشاشة بالعرض */
 .yt-fs { position: absolute; right: 8px; bottom: 8px; z-index: 5; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
