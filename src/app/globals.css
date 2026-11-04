@@ -1335,3 +1335,10 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
 .sg-later { margin-top: 18px; padding: 6px 14px; border: 0; background: none; font: inherit; font-size: 14px; color: var(--muted); cursor: pointer; }
 .sg-later:hover { color: var(--text); }
 .sg-err { margin: 12px 0 0; font-size: 13.5px; color: #f0b7a8; }
+
+/* صفحات الخصوصية والشروط: نص مريح للقراية */
+.legal { max-width: 720px; margin: 8px auto 60px; padding: 0 4px; line-height: 1.9; font-size: 16px; }
+.legal h1 { font-size: 28px; margin: 6px 0 14px; }
+.legal h2 { font-size: 19px; margin: 26px 0 6px; color: var(--gold-soft); }
+.legal p, .legal li { color: var(--text); opacity: .92; }
+.legal ul { padding-inline-start: 22px; margin: 6px 0; }
