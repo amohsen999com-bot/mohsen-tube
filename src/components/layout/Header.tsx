@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { VideoItem } from "@/lib/types";
 import { AlgoEngine } from "@/lib/client/algo";
 import { usePlayer } from "@/components/player/PlayerContext";
+import { LogoMark } from "./LogoMark";
 
 const SEARCH_HINTS = [
   "ابحث عن درس، شيخ، أو مهارة…",
@@ -212,17 +213,7 @@ export function Header() {
     <header className="top" ref={headerRef}>
       <div className="hdr-start">
         <Link href="/" className="logo" aria-label="محسن تيوب">
-          <svg className="logo-mark" viewBox="0 0 48 48" aria-hidden="true">
-            <defs>
-              <linearGradient id="lmBg" x1="0" y1="0" x2=".35" y2="1"><stop offset="0" stopColor="#8f1438" /><stop offset=".55" stopColor="#5d0018" /><stop offset="1" stopColor="#3a000f" /></linearGradient>
-              <linearGradient id="lmGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#f6e2a4" /><stop offset=".45" stopColor="#e2b54a" /><stop offset="1" stopColor="#a87412" /></linearGradient>
-              <radialGradient id="lmGlow" cx=".3" cy=".18" r=".75"><stop offset="0" stopColor="#fff" stopOpacity=".22" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></radialGradient>
-            </defs>
-            <path d="M6 41.5V22.5C6 13.2 13.4 7.2 24 2.2c10.6 5 18 11 18 20.3v19a3.5 3.5 0 0 1-3.5 3.5h-29A3.5 3.5 0 0 1 6 41.5z" fill="url(#lmBg)" />
-            <path d="M6 41.5V22.5C6 13.2 13.4 7.2 24 2.2c10.6 5 18 11 18 20.3v19a3.5 3.5 0 0 1-3.5 3.5h-29A3.5 3.5 0 0 1 6 41.5z" fill="url(#lmGlow)" />
-            <path d="M7.4 41.3V22.6C7.4 14 14.3 8.6 24 3.8c9.7 4.8 16.6 10.2 16.6 18.8v18.7a2.3 2.3 0 0 1-2.3 2.3H9.7a2.3 2.3 0 0 1-2.3-2.3z" fill="none" stroke="url(#lmGold)" strokeOpacity=".75" strokeWidth="1.1" />
-            <path d="M19.6 20.4v13.2c0 .9 1 1.4 1.7.9l10.3-6.6c.7-.4.7-1.4 0-1.8l-10.3-6.6c-.7-.5-1.7 0-1.7.9z" fill="url(#lmGold)" stroke="url(#lmGold)" strokeWidth="2.2" strokeLinejoin="round" />
-          </svg>
+          <LogoMark className="logo-mark" />
           <span className="logo-txt">
             <b>محسن</b>
             <b>تيوب</b>

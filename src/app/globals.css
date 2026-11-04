@@ -1155,11 +1155,11 @@ body.hdr-hide .chips-bar { top: 0; }
 }
 
 /* =====================================================================
-   اللوجو: محراب نبيتي بإطار دهبي وزرار تشغيل دهبي + اسم بخط كوفي، والكلمتين بنفس العرض. من غير حركة.
+   اللوجو: مربع نبيتي هادي وزرار تشغيل دهبي + اسم بخط كوفي، والكلمتين بنفس العرض. من غير حركة.
    ===================================================================== */
 .logo { gap: 11px; font-family: "Reem Kufi", "Noto Sans Arabic", sans-serif; }
 .logo-mark { width: 40px; height: 40px; border: 0; border-radius: 0; background: none; display: block; flex: none;
-  filter: drop-shadow(0 6px 14px rgba(93, 0, 24, .55)) drop-shadow(0 1px 0 rgba(0, 0, 0, .4)); }
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .35)); }
 .logo-txt { display: flex; flex-direction: column; align-items: stretch; line-height: .92; gap: 0; }
 .logo-txt b { display: block; font-weight: 700; letter-spacing: 0; white-space: nowrap; }
 .logo-txt b:first-child { font-size: 17px; color: #f4efe4; }
@@ -1190,9 +1190,9 @@ body.hdr-hide .chips-bar { top: 0; }
   animation: obRise .6s var(--ease, ease) both; }
 .ob-head { position: relative; flex: none; display: flex; flex-direction: column; align-items: center; text-align: center;
   padding: 26px 28px 18px; border-bottom: 1px solid rgba(255, 255, 255, .06); }
-.ob-mark { width: 52px; height: 52px; margin-bottom: 10px; filter: drop-shadow(0 8px 18px rgba(93, 0, 24, .7)); }
+.ob-mark { width: 48px; height: 48px; margin-bottom: 12px; }
 .ob-eyebrow { font-size: 13px; font-weight: 500; color: var(--gold-soft); letter-spacing: .2px; }
-.ob-head h2 { margin: 4px 0 6px; font-family: "Reem Kufi", "Noto Sans Arabic", sans-serif; font-size: 30px; font-weight: 700; }
+.ob-head h2 { margin: 4px 0 6px; font-size: 26px; font-weight: 700; }
 .ob-head p { margin: 0; max-width: 460px; font-size: 14.5px; line-height: 1.7; color: var(--muted); }
 .ob-skip-top { position: absolute; top: 16px; left: 16px; height: 34px; padding: 0 16px; border-radius: 999px; font: inherit;
   font-size: 14px; color: var(--muted); background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1);
