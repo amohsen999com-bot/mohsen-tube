@@ -1,0 +1,22 @@
+# Render Blueprint: free web service for محسن تيوب.
+# The SQLite catalog (data/mohsen.db, ~115 MB) is too big for git, so the build downloads it from this
+# repository's GitHub release "db-v1" (RENDER_GIT_REPO_SLUG = owner/repo, set by Render).
+services:
+  - type: web
+    name: mohsen-tube
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: >-
+      mkdir -p data &&
+      curl -fL "https://github.com/${RENDER_GIT_REPO_SLUG}/releases/download/db-v1/mohsen.db" -o data/mohsen.db &&
+      npm ci && npm run build
+    startCommand: npm start -- --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        value: https://psrqpjzovpnrrsaulahc.supabase.co
+      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        value: sb_publishable_4aHNMaBF1FNmBfVq6HhtsQ_2dD9a_bx
