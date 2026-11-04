@@ -1,10 +1,9 @@
 "use client";
 
 import React, { Suspense, useEffect, useState } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { VideoItem } from "@/lib/types";
-import { formatDuration, formatRelativeArabicDate } from "@/lib/arabic";
+import { VideoCard } from "@/components/video/VideoCard";
 import { ClientStore } from "@/lib/client/store";
 import { PageSkeleton } from "@/components/ui/Skeleton";
 
@@ -50,35 +49,14 @@ function SearchContent() {
       ) : results.length === 0 ? (
         <p className="muted pad">مفيش نتايج. جرّب كلمة تانية.</p>
       ) : (
-        <div className="results">
-          {results.map((v) => {
-            const prog = ClientStore.getProgress(v.id);
-            return (
-              <Link key={v.id} className="res-row" href={`/watch/${v.id}`}>
-                <div className="thumb">
-                  <img
-                    loading="lazy"
-                    className="ld"
-                    src={`https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`}
-                    alt=""
-                  />
-                  <span className="dur">{formatDuration(v.d)}</span>
-                  {prog && (
-                    <span className="bar">
-                      <i style={{ width: `${Math.max(prog[1] * 100, 4)}%` }} />
-                    </span>
-                  )}
-                </div>
-                <div className="res-info">
-                  <h3>{v.t}</h3>
-                  <div className="meta">
-                    {v.c} • {v.tp}
-                    {v.dt ? ` • ${formatRelativeArabicDate(v.dt)}` : ""}
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
+        <div className="grid">
+          {results.map((v) => (
+            <VideoCard
+              key={v.id}
+              video={v}
+              onHidden={(id) => setResults((prev) => prev.filter((x) => x.id !== id))}
+            />
+          ))}
         </div>
       )}
     </div>
