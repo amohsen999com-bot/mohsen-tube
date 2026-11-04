@@ -84,7 +84,8 @@ export function Header() {
       const b = document.body;
       b.classList.toggle("scrolled", y > 8);
       if (Math.abs(y - lastY) < 6) return;
-      const searching = !!headerRef.current?.contains(document.activeElement);
+      // Stay put only while typing a search (keyboard open); a tapped tab or icon keeps focus too, but must not pin the header
+      const searching = document.activeElement === inputRef.current;
       b.classList.toggle("hdr-hide", y > lastY && y > 140 && !searching);
       lastY = y;
     };
