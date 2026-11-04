@@ -16,7 +16,7 @@ a { color: inherit; text-decoration: none; }
 .pad { padding: 16px; }
 
 /* ---------- الشريط العلوي ---------- */
-.top { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 24px;
+.top { position: relative; z-index: 10; display: flex; align-items: center; gap: 24px;
   height: 64px; padding: 0 28px; background: var(--bg); }
 .top::after { content: ""; position: absolute; right: 0; left: 0; bottom: -3px; height: 3px;
   background: linear-gradient(to bottom, var(--gold) 0 50%, var(--wine) 50% 100%); }
@@ -631,7 +631,6 @@ body.abar-on { padding-bottom: 72px; }
 
 /* الهيدر: بيبقى زجاج مغبّش لما تنزل */
 .top { transition: background .5s var(--ease), backdrop-filter .5s var(--ease); view-transition-name: header; }
-body.scrolled .top { background: rgba(25, 23, 27, .72); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4); }
 .top::after { transform-origin: right; animation: drawLine 1.2s var(--ease) both .2s; }
 @keyframes drawLine { from { transform: scaleX(0); } }
 @keyframes fadeDown { from { opacity: 0; transform: translateY(-10px); } }
@@ -916,7 +915,7 @@ body { background:
    - صف واحد: اللوجو والتبويبات يمين، البحث في النص (أهم حاجة)، الاشتراكات والمكتبة شمال
    - التبويبات كبسولة واحدة، والمختار عليه خلفية دهبي ناعمة بتتزحلق
    - البحث كبسولة واحدة فيها كل حاجة، والنص الإرشادي بيقترح عليك تدوّر على إيه
-   - وإنت نازل الهيدر بيستخبى عشان المحتوى ياخد الشاشة، وأول ما تطلع ولو شوية بيرجع
+   - الهيدر وشريط المواضيع ثابتين فوق الصفحة: ما بينزلوش معاك وإنت بتسكرول
    ===================================================================== */
 
 .top {
@@ -926,8 +925,6 @@ body { background:
   backdrop-filter: blur(20px) saturate(1.5); -webkit-backdrop-filter: blur(20px) saturate(1.5);
   transition: transform .45s var(--ease), background .4s var(--ease), box-shadow .4s var(--ease);
 }
-body.scrolled .top { background: rgba(25, 23, 27, .78); box-shadow: 0 10px 30px -18px rgba(0, 0, 0, .8); }
-body.hdr-hide .top { transform: translateY(-100%); box-shadow: none; }
 /* خط شعرة: دهبي باهت في النص وبيختفي ناحية الأطراف */
 .top::after { bottom: 0; height: 1px; animation: none;
   background: linear-gradient(to left, transparent, rgba(210, 159, 34, .38) 30%, rgba(210, 159, 34, .38) 70%, transparent); }
@@ -1007,7 +1004,7 @@ body.hdr-hide .top { transform: translateY(-100%); box-shadow: none; }
   .top .lib-link { width: 38px; height: 38px; }
 }
 @media (max-width: 340px) { .logo-txt { font-size: 17px; } }
-@media (prefers-reduced-motion: reduce) { .top { transition: none; } body.hdr-hide .top { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .top { transition: none; } }
 
 
 /* === mohsen-tube/site/home.css === */
@@ -1048,11 +1045,9 @@ body.hdr-hide .top { transform: translateY(-100%); box-shadow: none; }
 .wird-streak svg { width: 15px; height: 15px; fill: currentColor; }
 
 /* شريط المواضيع */
-.chips-bar { position: sticky; top: var(--hdr-h, 64px); z-index: 8; display: flex; align-items: center;
+.chips-bar { position: relative; z-index: 8; display: flex; align-items: center;
   margin: 0 -28px 18px; padding: 10px 28px; background: rgba(25, 23, 27, .7);
-  backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4);
-  transition: top .45s var(--ease); }
-body.hdr-hide .chips-bar { top: 0; }
+  backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4); }
 .chips-bar .topic-chips { flex: 1; min-width: 0; gap: 8px; padding: 0; scroll-behavior: smooth;
   --fade-s: 0px; --fade-e: 0px;
   -webkit-mask-image: linear-gradient(to left, transparent 0, #000 var(--fade-s), #000 calc(100% - var(--fade-e)), transparent 100%);
