@@ -362,7 +362,7 @@ export function VideoDock() {
       autoplay: "1",
       controls: "1",
       disablekb: "1",
-      fs: "1", // YouTube's own fullscreen button (the player uses YouTube's controls)
+      fs: "0", // YouTube's button sits on the far left in Arabic; ours (.yt-fs) is on the far right and turns sideways
       iv_load_policy: "3",
       modestbranding: "1",
       rel: "0",
@@ -604,6 +604,20 @@ export function VideoDock() {
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
+  /** True while the browser's real fullscreen is on (not the rotated CSS fallback used on iPhone) */
+  const realFullRef = useRef(false);
+  // Leaving real fullscreen with the phone's back gesture / Esc must also leave our fullscreen layout
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement && realFullRef.current) {
+        realFullRef.current = false;
+        setIsFullscreen(false);
+      }
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
   const toggleFullscreen = () => {
     const next = !isFullscreen;
     setIsFullscreen(next);
@@ -611,7 +625,10 @@ export function VideoDock() {
     if (next) {
       dockRef.current
         ?.requestFullscreen?.()
-        .then(() => orientation?.lock?.("landscape"))
+        .then(() => {
+          realFullRef.current = true;
+          return orientation?.lock?.("landscape");
+        })
         .catch(() => {});
     } else {
       try {
@@ -733,6 +750,20 @@ export function VideoDock() {
             </svg>
           </span>
         </div>
+
+        {/* Our fullscreen button, far right: fills the screen and turns it sideways */}
+        {ytControls && !isMini && (
+          <button
+            type="button"
+            className="yt-fs"
+            aria-label={isFullscreen ? "خروج من ملء الشاشة" : "ملء الشاشة"}
+            onClick={toggleFullscreen}
+          >
+            <svg viewBox="0 0 24 24">
+              <path d={isFullscreen ? UNFULL_PATH : FULL_PATH} />
+            </svg>
+          </button>
+        )}
 
         {/* Phones: YouTube's phone embed ignores taps while a video plays, so an invisible layer pauses it on tap.
             It exists only while playing: once paused it is gone entirely, so YouTube's own play button, ⚙ menu,

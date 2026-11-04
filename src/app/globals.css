@@ -1370,3 +1370,9 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
 @media (hover: none), (pointer: coarse) {
   .dock.yt-native:not(.mini) .yt-tap { display: block; position: absolute; inset: 0; z-index: 4; -webkit-tap-highlight-color: transparent; }
 }
+
+/* زرار ملء الشاشة بتاعنا: أقصى اليمين تحت، فوق شريط يوتيوب. بيكبّر ويلف الشاشة بالعرض */
+.yt-fs { position: absolute; right: 8px; bottom: 8px; z-index: 5; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
+  border: 0; cursor: pointer; color: #fff; background: rgba(0, 0, 0, .45); -webkit-tap-highlight-color: transparent; }
+.yt-fs svg { width: 22px; height: 22px; fill: currentColor; }
+.yt-fs:active { transform: scale(.92); }
