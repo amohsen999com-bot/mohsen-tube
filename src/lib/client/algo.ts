@@ -316,6 +316,15 @@ export function getWhyLabel(v: VideoItem): string {
 
 const finished = new Set<string>();
 
+/**
+ * Channels that are good but very prolific: a small fixed nudge down in "مقترح لك" so they show up less
+ * often. They still come up for people who watch or subscribe to them (affinity/subs outweigh this).
+ */
+const CHANNEL_DAMP: Record<string, number> = {
+  "الشيخ وليد إسماعيل (الدافع)": 0.3,
+  "د. هيثم طلعت": 0.15,
+};
+
 export const AlgoEngine = {
   setLabels(labels: LabelsAggregate) {
     if (labels) labelsCache = labels;
@@ -413,6 +422,7 @@ export const AlgoEngine = {
     const now = Date.now();
 
     const scored = candidates.map((v) => {
+      const damp = CHANNEL_DAMP[v.c] || 0;
       const aff = getVideoAffinity(v);
       const mood = learned ? getSessionAffinity(v) : 0;
       const tFit = getTimeFit(v);
@@ -424,7 +434,7 @@ export const AlgoEngine = {
       const [gb, gwhy, step] = Growth.bonus(v, aff, ctx);
       const score =
         1.35 * aff + 0.45 * tFit + 0.75 * quality + subBoost - skipPenalty +
-        1.1 * Math.tanh(relScore) + fresh + gb;
+        1.1 * Math.tanh(relScore) + fresh + gb - damp;
       const why =
         fresh > 0.3 ? "جديد من " + v.c
         : mood > 0.6 ? "على مزاجك دلوقتي"

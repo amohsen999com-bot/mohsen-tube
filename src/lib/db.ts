@@ -141,6 +141,9 @@ export function getCatalogSummary() {
   };
 }
 
+/** Max videos one channel can contribute to the home candidate pool */
+const FEED_CHANNEL_CAP = 40;
+
 export function getFeedVideos(options: {
   topic?: string;
   category?: "all" | "fun";
@@ -174,20 +177,25 @@ export function getFeedVideos(options: {
     return { videos: rows.map(mapRowToVideo), total: totalRow.cnt };
   }
 
-  // Balanced pool across وعظ, عمل, ترفيه so client Two-Tower & rhythm engine has rich candidates
+  // Balanced pool across وعظ, عمل, ترفيه so client Two-Tower & rhythm engine has rich candidates.
+  // No channel may take more than FEED_CHANNEL_CAP of the pool (one prolific channel used to fill a third of it).
   const totalRow = db
     .prepare(`SELECT COUNT(*) as cnt FROM videos WHERE is_curated = 1`)
     .get() as { cnt: number };
 
   const rows = db
     .prepare(
-      `SELECT ${VIDEO_COLS}
-       FROM videos
-       WHERE is_curated = 1
-       ORDER BY (0.55 * COALESCE(s, r) + 0.25 * COALESCE(q, 0.5) + 0.2 * hd) DESC
+      `SELECT ${VIDEO_COLS} FROM (
+         SELECT *, (0.55 * COALESCE(s, r) + 0.25 * COALESCE(q, 0.5) + 0.2 * hd) AS score,
+                ROW_NUMBER() OVER (PARTITION BY c ORDER BY (0.55 * COALESCE(s, r) + 0.25 * COALESCE(q, 0.5) + 0.2 * hd) DESC) AS ch_rank
+         FROM videos
+         WHERE is_curated = 1
+       )
+       WHERE ch_rank <= ?
+       ORDER BY score DESC
        LIMIT ? OFFSET ?`
     )
-    .all(limit, offset) as unknown as RawVideoRow[];
+    .all(FEED_CHANNEL_CAP, limit, offset) as unknown as RawVideoRow[];
 
   return { videos: rows.map(mapRowToVideo), total: totalRow.cnt };
 }
