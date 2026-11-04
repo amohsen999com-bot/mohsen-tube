@@ -362,7 +362,7 @@ export function VideoDock() {
       autoplay: "1",
       controls: "1",
       disablekb: "1",
-      fs: "0",
+      fs: "1", // YouTube's own fullscreen button (the player uses YouTube's controls)
       iv_load_policy: "3",
       modestbranding: "1",
       rel: "0",
@@ -373,6 +373,7 @@ export function VideoDock() {
       origin: window.location.origin,
     });
     iframe.src = `https://www.youtube-nocookie.com/embed/${video.id}?${params.toString()}`;
+    iframe.allowFullscreen = true;
     iframe.allow =
       "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen";
     iframe.title = video.t;
