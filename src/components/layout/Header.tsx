@@ -62,11 +62,40 @@ export function Header() {
         )
       ) {
         e.preventDefault();
+        document.body.classList.remove("hdr-hide");
         inputRef.current?.focus();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  // Glass when scrolled; hides while scrolling down (content gets the screen), back on any scroll up.
+  // --hdr-h lets the sticky topic chips sit right under it (it's taller on phones).
+  useEffect(() => {
+    let lastY = window.scrollY;
+    const measure = () => {
+      if (headerRef.current) {
+        document.documentElement.style.setProperty("--hdr-h", headerRef.current.offsetHeight + "px");
+      }
+    };
+    const onScroll = () => {
+      const y = window.scrollY;
+      const b = document.body;
+      b.classList.toggle("scrolled", y > 8);
+      if (Math.abs(y - lastY) < 6) return;
+      const searching = !!headerRef.current?.contains(document.activeElement);
+      b.classList.toggle("hdr-hide", y > lastY && y > 140 && !searching);
+      lastY = y;
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", onScroll);
+      document.body.classList.remove("hdr-hide");
+    };
   }, []);
 
   // Sliding gold capsule behind the active tab
