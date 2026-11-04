@@ -1,16 +1,13 @@
 # Render Blueprint: free web service for محسن تيوب.
-# The SQLite catalog (data/mohsen.db, ~115 MB) is too big for git, so the build downloads it from this
-# repository's GitHub release "db-v1" (RENDER_GIT_REPO_SLUG = owner/repo, set by Render).
+# The SQLite catalog (data/mohsen.db, ~115 MB) is too big for git, so it's committed gzipped
+# (data/mohsen.db.gz, ~23 MB) and unpacked during the build.
 services:
   - type: web
     name: mohsen-tube
     runtime: node
     plan: free
     region: frankfurt
-    buildCommand: >-
-      mkdir -p data &&
-      curl -fL "https://github.com/${RENDER_GIT_REPO_SLUG}/releases/download/db-v1/mohsen.db" -o data/mohsen.db &&
-      npm ci && npm run build
+    buildCommand: gunzip -c data/mohsen.db.gz > data/mohsen.db && npm ci && npm run build
     startCommand: npx next start --port $PORT
     healthCheckPath: /
     envVars:
