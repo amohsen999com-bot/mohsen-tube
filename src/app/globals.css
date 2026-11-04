@@ -1419,3 +1419,10 @@ body.hdr-hide .chips-bar { top: -80px; }
 .sk-pill { width: 88px; height: 36px; border-radius: 999px; }
 .sk-channel { margin-bottom: 26px; align-items: center; }
 @media (prefers-reduced-motion: reduce) { .sk::after { animation: none; } }
+
+/* قايمة ⋮ على الكارت: بتطلع جنب الزرار، فوق الكروت التانية، وبتتقفل لو لمست برّه أو سكرولت */
+.card-wrap.menu-open { z-index: 20; }
+.pop-menu.card-pop { position: absolute; left: 0; top: calc(100% - 52px); width: min(290px, 92vw); z-index: 30;
+  animation: cardPop .18s var(--ease, ease) both; transform-origin: top left; }
+@keyframes cardPop { from { opacity: 0; transform: scale(.94) translateY(-4px); } to { opacity: 1; transform: none; } }
+.side-list .pop-menu.card-pop { top: 100%; }
