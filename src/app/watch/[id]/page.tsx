@@ -11,6 +11,7 @@ import {
 } from "@/lib/arabic";
 import { usePlayer } from "@/components/player/PlayerContext";
 import { VideoCard } from "@/components/video/VideoCard";
+import { ClipEditor } from "@/components/video/ClipEditor";
 import { QuoteModal } from "@/components/modals/QuoteModal";
 import { ClientStore, subscribeStore } from "@/lib/client/store";
 import { AlgoEngine } from "@/lib/client/algo";
@@ -63,7 +64,6 @@ export default function WatchPage({
   const [clipPanelOpen, setClipPanelOpen] = useState(false);
   const [clipStart, setClipStart] = useState(0);
   const [clipEnd, setClipEnd] = useState(30);
-  const [clipName, setClipName] = useState("");
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareAtTime, setShareAtTime] = useState(false);
@@ -189,10 +189,10 @@ export default function WatchPage({
     showToast(on ? `اشتركت في ${detail.video.c}` : "ألغيت الاشتراك");
   };
 
-  const handleSaveClip = () => {
+  const handleSaveClip = (start: number, end: number, clipName: string) => {
     if (!detail?.video) return;
-    const s = Math.max(0, Math.floor(clipStart));
-    const e = Math.max(s + 3, Math.floor(clipEnd));
+    const s = Math.max(0, Math.floor(start));
+    const e = Math.max(s + 1, Math.floor(end));
     ClientStore.saveClip({
       vid: detail.video.id,
       t: detail.video.t,
@@ -265,117 +265,23 @@ export default function WatchPage({
         {/* VideoDock mounts directly over this 16:9 slot */}
         <div ref={playerSlotRef} className="player" id="player" />
 
-        {/* Inline Clip Builder */}
+        {/* Clip editor: drag both ends on a zoomed track; the video jumps to the frame you're on */}
         {clipPanelOpen && (
-          <div className="clip-box">
-            <div className="clip-head">
-              <b>✂ قص جزء ومشاركته</b>
-              <span className="clip-len">
-                {formatDuration(Math.max(0, clipEnd - clipStart))}
-              </span>
-              <button
-                type="button"
-                aria-label="قفل"
-                onClick={() => {
-                  setClipPanelOpen(false);
-                  setClipRange(null);
-                }}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="clip-ctl" dir="ltr">
-              <div className="clip-end">
-                <small>البداية</small>
-                <span>
-                  <button
-                    type="button"
-                    onClick={() => setClipStart(Math.max(0, clipStart - 5))}
-                  >
-                    -5s
-                  </button>
-                  <input
-                    type="text"
-                    readOnly
-                    value={formatDuration(clipStart)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setClipStart(Math.min(clipEnd - 3, clipStart + 5))
-                    }
-                  >
-                    +5s
-                  </button>
-                </span>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => setClipStart(Math.floor(currentTime))}
-                >
-                  من اللحظة دي
-                </button>
-              </div>
-              <div className="clip-end">
-                <small>النهاية</small>
-                <span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setClipEnd(Math.max(clipStart + 3, clipEnd - 5))
-                    }
-                  >
-                    -5s
-                  </button>
-                  <input type="text" readOnly value={formatDuration(clipEnd)} />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setClipEnd(Math.min(video.d || 3600, clipEnd + 5))
-                    }
-                  >
-                    +5s
-                  </button>
-                </span>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() =>
-                    setClipEnd(
-                      Math.max(clipStart + 5, Math.floor(currentTime))
-                    )
-                  }
-                >
-                  للحظة دي
-                </button>
-              </div>
-            </div>
-            <div className="modal-bar clip-bar">
-              <input
-                className="clip-name"
-                placeholder="عنوان للمقطع (اختياري)…"
-                value={clipName}
-                onChange={(e) => setClipName(e.target.value)}
-              />
-              <button
-                type="button"
-                className="btn"
-                onClick={() => {
-                  setClipRange([clipStart, clipEnd]);
-                  seekTo(clipStart);
-                }}
-              >
-                ▶ معـاينة
-              </button>
-              <button
-                type="button"
-                className="btn gold"
-                onClick={handleSaveClip}
-              >
-                احفظ في مقاطعك
-              </button>
-            </div>
-          </div>
+          <ClipEditor
+            duration={video.d}
+            startAt={clipStart}
+            currentTime={currentTime}
+            seekTo={seekTo}
+            onPreview={(s, e) => {
+              setClipRange([s, e]);
+              seekTo(s);
+            }}
+            onSave={handleSaveClip}
+            onClose={() => {
+              setClipPanelOpen(false);
+              setClipRange(null);
+            }}
+          />
         )}
 
         <h1>{video.t}</h1>
