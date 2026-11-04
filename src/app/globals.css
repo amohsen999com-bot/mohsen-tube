@@ -1388,3 +1388,6 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
 .clips-file { display: flex; gap: 8px; flex-wrap: wrap; }
 .clips-file .btn { height: 36px; display: inline-flex; align-items: center; cursor: pointer; }
 .clips-file .btn:disabled { opacity: .45; cursor: default; }
+/* أيقونات البانر: SVG أبيض (مش إيموجي) عشان تبان زي بعض على الكمبيوتر والموبايل */
+.hero-mute { display: grid; place-items: center; padding: 0; }
+.hero-mute svg { width: 20px; height: 20px; fill: currentColor; }

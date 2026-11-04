@@ -181,7 +181,9 @@ export function HeroBanner({
           aria-label="إيقاف"
           onClick={togglePause}
         >
-          {isPlaying ? "⏸" : "▶"}
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d={isPlaying ? "M7 5h3.4v14H7zM13.6 5H17v14h-3.4z" : "M8 5.5v13c0 .8.9 1.3 1.6.8l10-6.5c.6-.4.6-1.2 0-1.6l-10-6.5C8.9 4.2 8 4.7 8 5.5z"} />
+          </svg>
         </button>
         <button
           type="button"
@@ -189,7 +191,15 @@ export function HeroBanner({
           aria-label="الصوت"
           onClick={toggleMute}
         >
-          {isMuted ? "🔇" : "🔊"}
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d={
+                isMuted
+                  ? "M4 9v6h4l5 4V5L8 9H4zm12.6 3l2.7-2.7-1.4-1.4-2.7 2.7-2.7-2.7-1.4 1.4 2.7 2.7-2.7 2.7 1.4 1.4 2.7-2.7 2.7 2.7 1.4-1.4z"
+                  : "M4 9v6h4l5 4V5L8 9H4zm11.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM13 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"
+              }
+            />
+          </svg>
         </button>
       </div>
     </section>
