@@ -1,6 +1,7 @@
 import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
+import os from "node:os";
 import { DatabaseSync } from "node:sqlite";
 import type {
   ChannelInfo,
@@ -24,12 +25,19 @@ let _vocabCache: string[] | null = null;
 
 export function getDb(): DatabaseSync {
   if (_db) return _db;
-  const dbPath =
+  let dbPath =
     process.env.MOHSEN_DB_PATH || path.join(process.cwd(), "data", "mohsen.db");
   if (!fs.existsSync(dbPath)) {
     throw new Error(
       `Database file not found at ${dbPath}. Run "npm run seed" first.`
     );
+  }
+  // Serverless hosts (Vercel) ship the bundle read-only; SQLite needs a writable file (WAL, rooms, labels),
+  // so each instance works on its own copy in /tmp. Those writes are per-instance and short-lived.
+  if (process.env.VERCEL) {
+    const tmp = path.join(os.tmpdir(), "mohsen.db");
+    if (!fs.existsSync(tmp)) fs.copyFileSync(dbPath, tmp);
+    dbPath = tmp;
   }
   _db = new DatabaseSync(dbPath);
   _db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
