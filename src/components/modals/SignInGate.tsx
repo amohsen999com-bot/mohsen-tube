@@ -13,6 +13,7 @@ const LATER_KEY = "nt__signin_later";
 export function SignInGate() {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     if (!cloudConfigured() || currentUser()) return;
@@ -45,9 +46,14 @@ export function SignInGate() {
           type="button"
           className="sg-google"
           disabled={busy}
-          onClick={() => {
+          onClick={async () => {
             setBusy(true);
-            signInWithGoogle();
+            setFailed(false);
+            const leaving = await signInWithGoogle();
+            if (!leaving) {
+              setBusy(false);
+              setFailed(true);
+            }
           }}
         >
           <svg viewBox="0 0 48 48" aria-hidden="true">
@@ -58,6 +64,7 @@ export function SignInGate() {
           </svg>
           {busy ? "ثواني…" : "ادخل بحساب جوجل"}
         </button>
+        {failed && <p className="sg-err">تسجيل الدخول بجوجل مش متاح دلوقتي. جرّب كمان شوية، أو اضغط "بعدين".</p>}
         <p className="sg-note">بنحفظ بيه محفوظاتك وذوقك على أي جهاز. مش بنبعت حاجة باسمك.</p>
         <button type="button" className="sg-later" onClick={later}>
           بعدين
