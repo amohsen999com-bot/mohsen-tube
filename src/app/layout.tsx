@@ -6,7 +6,7 @@ import { VideoDock } from "@/components/player/VideoDock";
 
 export const metadata: Metadata = {
   title: "محسن تيوب",
-  description: "فيديوهات نافعة: دروس، كورسات، اصنعها بنفسك، ورياضة",
+  description: "فيديوهات نافعة: دروس، كورسات، واصنعها بنفسك",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: "/icons/icon-192.png",

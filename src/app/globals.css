@@ -1235,25 +1235,23 @@ body.hdr-hide .chips-bar { top: 0; }
 @media (prefers-reduced-motion: reduce) { .ob-overlay, .ob-card { animation: none; } }
 
 /* =====================================================================
-   صفحة الترفيه "متعة بتفيد": رفوف أفقية بعنوان وجملة تشدّ، وخليط تحت.
+   صفحة الترفيه "متعة بتفيد": رفوف أفقية من غير عناوين، وأسهم على أطراف الرف، وخليط تحت.
    ===================================================================== */
 .shelf { margin-bottom: 38px; }
-.shelf-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
-.shelf-title { position: relative; margin: 0; padding-inline-start: 12px; font-size: 21px; font-weight: 700; }
-.shelf-title::before { content: ""; position: absolute; inset-inline-start: 0; top: 5px; bottom: 5px; width: 4px; border-radius: 4px;
-  background: linear-gradient(180deg, var(--gold) 0%, #7a0a26 100%); }
-.shelf-hook { margin: 4px 0 0; padding-inline-start: 12px; font-size: 14px; color: var(--muted); }
-.shelf-nav { display: flex; gap: 8px; flex: none; }
-.shelf-nav button { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
-  color: var(--text); background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .1); transition: background .2s, opacity .2s; }
-.shelf-nav button:hover:not(:disabled) { background: rgba(255, 255, 255, .12); }
-.shelf-nav button:disabled { opacity: .3; cursor: default; }
-.shelf-nav svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.shelf-strip { position: relative; }
+.shelf-arrow { position: absolute; top: 30%; z-index: 2; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+  cursor: pointer; color: var(--text); background: rgba(25, 23, 27, .88); border: 1px solid rgba(255, 255, 255, .14);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .5); transition: background .2s, transform .2s; }
+.shelf-arrow:hover { background: rgba(60, 20, 34, .95); transform: scale(1.06); }
+.shelf-arrow[hidden] { display: none; }
+.shelf-arrow.prev { right: -6px; }
+.shelf-arrow.next { left: -6px; }
+.shelf-arrow svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .shelf-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(270px, 300px); gap: 18px; overflow-x: auto;
   scroll-snap-type: x mandatory; scroll-padding-inline: 2px; padding-bottom: 6px; scrollbar-width: none; }
 .shelf-row::-webkit-scrollbar { display: none; }
 .shelf-cell { scroll-snap-align: start; min-width: 0; }
 @media (max-width: 860px) {
-  .shelf-nav { display: none; }
+  .shelf-arrow { display: none; }
   .shelf-row { grid-auto-columns: 78%; gap: 12px; }
 }

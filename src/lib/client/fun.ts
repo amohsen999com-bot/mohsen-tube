@@ -3,10 +3,10 @@
 /**
  * صفحة الترفيه: "متعة بتفيد".
  * الفكرة إن الترفيه نفسه يشدّ الناس للشغل والصنعة ولدينهم من غير وعظ مباشر:
- * - رفوف واضحة (بإيدك، عقل المخترع، حكايات، من الأرض للسفرة، مهارة في ربع ساعة، دقايق للقلب، رياضة).
+ * - رفوف واضحة (بإيدك، عقل المخترع، حكايات، من الأرض للسفرة، مهارة في ربع ساعة، دقايق للقلب).
  * - ترتيب الفيديوهات جوه كل رف = جودة + ذوق المستخدم + جديد + لمسة تتغير كل يوم، ومن غير تكرار نفس القناة.
- * - ترتيب الرفوف بيتبع ذوقك، بس الصنعة والحكايات دايمًا فوق، والرياضة عمرها ما تيجي في الأول.
- * - تحت الرفوف "كمّل اتفرج" بتوزيع ثابت: أغلبه صنعة ومهارة وحكايات، والرياضة نصيبها صغير.
+ * - ترتيب الرفوف بيتبع ذوقك، بس الصنعة والحكايات دايمًا فوق.
+ * - تحت الرفوف "كمّل اتفرج" بتوزيع ثابت: صنعة ومهارة وحكايات وقلب.
  */
 import { VideoItem } from "@/lib/types";
 import { getVideoAffinity, isResting, getSkips } from "@/lib/client/algo";
@@ -73,19 +73,12 @@ const SHELVES: ShelfDef[] = [
     base: 0.78,
     match: (v) => DEEN_GROUPS.has(v.g) && v.tp === "رقائق",
   },
-  {
-    key: "sport",
-    title: "رياضة",
-    hook: "ملخصات سريعة، من غير ما تضيّع يومك",
-    base: 0.3,
-    match: (v) => v.g === "رياضة",
-  },
 ];
 
 const SHELF_SIZE = 14;
 const PER_CHANNEL = 2;
-/** توزيع "كمّل اتفرج": ١٠ خانات تتكرر، الرياضة خانة واحدة بس */
-const MIX_PATTERN = ["hands", "stories", "inventor", "skills", "hands", "heart", "land", "stories", "inventor", "sport"];
+/** توزيع "كمّل اتفرج": ١٠ خانات تتكرر، الصنعة والحكايات ليهم النصيب الأكبر */
+const MIX_PATTERN = ["hands", "stories", "inventor", "skills", "hands", "heart", "land", "stories", "inventor", "skills"];
 
 function hash01(text: string): number {
   let h = 2166136261;
@@ -112,14 +105,14 @@ export function funScore(v: VideoItem, day: string): number {
   return score;
 }
 
-function pickDiverse(list: VideoItem[], take: number, used: Set<string>, perChannelMax = PER_CHANNEL): VideoItem[] {
+function pickDiverse(list: VideoItem[], take: number, used: Set<string>): VideoItem[] {
   const perChannel = new Map<string, number>();
   const out: VideoItem[] = [];
   for (const v of list) {
     if (out.length >= take) break;
     if (used.has(v.id)) continue;
     const n = perChannel.get(v.c) || 0;
-    if (n >= perChannelMax) continue;
+    if (n >= PER_CHANNEL) continue;
     perChannel.set(v.c, n + 1);
     out.push(v);
   }
@@ -145,10 +138,9 @@ export function buildFunLayout(pool: VideoItem[], now = new Date()): FunLayout {
 
   const used = new Set<string>();
 
-  // "مختارات النهارده": أحسن فيديو من كل رف (من غير رياضة) عشان أول شاشة تبان متنوعة
+  // "مختارات النهارده": أحسن فيديو من كل رف عشان أول شاشة تبان متنوعة
   const picks: VideoItem[] = [];
   for (const def of SHELVES) {
-    if (def.key === "sport") continue;
     const top = pickDiverse(buckets.get(def.key) || [], 1, used);
     picks.push(...top);
   }
@@ -160,23 +152,16 @@ export function buildFunLayout(pool: VideoItem[], now = new Date()): FunLayout {
     const taste = top.length ? top.reduce((a, v) => a + getVideoAffinity(v), 0) / top.length : 0;
     return { def, rank: def.base + 0.6 * taste };
   }).sort((a, b) => b.rank - a.rank);
-  // الصنعة والحكايات أول رفين دايمًا، والرياضة ما تطلعش قبل الرف الرابع
+  // الصنعة والحكايات أول رفين دايمًا
   const pinned = ["hands", "stories"];
   const order = [
     ...pinned.map((k) => ranked.find((r) => r.def.key === k)!),
     ...ranked.filter((r) => !pinned.includes(r.def.key)),
   ];
-  const sportAt = order.findIndex((r) => r.def.key === "sport");
-  if (sportAt > -1 && sportAt < 4) {
-    const [sport] = order.splice(sportAt, 1);
-    order.splice(Math.min(4, order.length), 0, sport);
-  }
 
   const shelves: FunShelf[] = [];
   for (const { def } of order) {
-    // الملخصات الرياضية كلها من قناة أو اتنين، فمفيش سقف للقناة هنا، والرف نفسه صغير
-    const isSport = def.key === "sport";
-    const videos = pickDiverse(buckets.get(def.key) || [], isSport ? 8 : SHELF_SIZE, used, isSport ? 8 : PER_CHANNEL);
+    const videos = pickDiverse(buckets.get(def.key) || [], SHELF_SIZE, used);
     if (videos.length >= 4) shelves.push({ key: def.key, title: def.title, hook: def.hook, videos });
   }
 

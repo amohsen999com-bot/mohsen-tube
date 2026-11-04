@@ -103,8 +103,8 @@ describe("SQLite + FTS5 Catalog & Search Engine", () => {
         .prepare("SELECT COUNT(*) as c FROM videos WHERE is_curated = 1")
         .get() as { c: number }
     ).c;
-    assert.ok(curated >= 13400, `Expected >= 13400 curated, got ${curated}`);
-    assert.ok(total >= 100500, `Expected >= 100500 total, got ${total}`);
+    assert.ok(curated >= 13200, `Expected >= 13200 curated, got ${curated}`);
+    assert.ok(total >= 100000, `Expected >= 100000 total, got ${total}`);
   });
 
   it("excludes blocked channels from catalog summary and videos", () => {
@@ -119,19 +119,19 @@ describe("SQLite + FTS5 Catalog & Search Engine", () => {
   it("returns paginated feed and fun category slices", () => {
     const home = getFeedVideos({ category: "all", limit: 24, offset: 0 });
     assert.equal(home.videos.length, 24);
-    assert.ok(home.total >= 13400);
+    assert.ok(home.total >= 13200);
 
     const fun = getFeedVideos({ category: "fun", limit: 24, offset: 0 });
     assert.equal(fun.videos.length, 24);
-    const FUN_GROUPS = ["اصنعها بنفسك", "رياضة", "بودكاست", "علماء", "أنا السلفي", "كورسات"];
+    const FUN_GROUPS = ["اصنعها بنفسك", "بودكاست", "علماء", "أنا السلفي", "كورسات"];
     assert.ok(fun.videos.every((v) => FUN_GROUPS.includes(v.g)));
   });
 
-  it("keeps the fun pool varied: sports capped, crafts lead, stories and short skills present", () => {
+  it("keeps the fun pool varied: no sports, crafts lead, stories and short skills present", () => {
     const all = getFeedVideos({ category: "fun", limit: 1500, offset: 0 }).videos;
     const by = (p: (v: (typeof all)[number]) => boolean) => all.filter(p).length;
-    assert.ok(by((v) => v.g === "رياضة") <= 40, "sports must stay a small slice");
-    assert.ok(by((v) => v.g === "اصنعها بنفسك") > by((v) => v.g === "رياضة") * 5);
+    assert.equal(by((v) => v.g === "رياضة" || v.c === "beIN SPORTS"), 0, "beIN SPORTS was removed from the site");
+    assert.ok(by((v) => v.g === "اصنعها بنفسك") > 200);
     assert.ok(by((v) => v.tp === "سيرة وتاريخ") > 0, "faith stories belong in the fun pool");
     assert.ok(all.filter((v) => v.g === "كورسات").every((v) => v.d <= 960), "only short skills");
     assert.equal(new Set(all.map((v) => v.id)).size, all.length, "no duplicates across buckets");

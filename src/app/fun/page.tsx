@@ -7,7 +7,7 @@ import { buildFunLayout, FunLayout } from "@/lib/client/fun";
 
 const MIX_PAGE = 24;
 
-function Shelf({ title, hook, videos, onHidden }: { title: string; hook: string; videos: VideoItem[]; onHidden: (id: string) => void }) {
+function Shelf({ label, videos, onHidden }: { label: string; videos: VideoItem[]; onHidden: (id: string) => void }) {
   const rowRef = useRef<HTMLDivElement | null>(null);
   const [edges, setEdges] = useState({ prev: false, next: true });
 
@@ -35,21 +35,13 @@ function Shelf({ title, hook, videos, onHidden }: { title: string; hook: string;
   };
 
   return (
-    <section className="shelf">
-      <header className="shelf-head">
-        <div>
-          <h2 className="shelf-title">{title}</h2>
-          <p className="shelf-hook">{hook}</p>
-        </div>
-        <div className="shelf-nav">
-          <button type="button" aria-label="اللي قبل" disabled={!edges.prev} onClick={() => scroll(-1)}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
-          </button>
-          <button type="button" aria-label="اللي بعده" disabled={!edges.next} onClick={() => scroll(1)}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
-          </button>
-        </div>
-      </header>
+    <section className="shelf shelf-strip" aria-label={label}>
+      <button type="button" className="shelf-arrow prev" aria-label="اللي قبل" hidden={!edges.prev} onClick={() => scroll(-1)}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+      </button>
+      <button type="button" className="shelf-arrow next" aria-label="اللي بعده" hidden={!edges.next} onClick={() => scroll(1)}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+      </button>
       <div className="shelf-row" ref={rowRef}>
         {videos.map((v) => (
           <div className="shelf-cell" key={v.id}>
@@ -112,12 +104,6 @@ export default function FunPage() {
     <div className="fun">
       {layout.picks.length > 0 && (
         <section className="shelf">
-          <header className="shelf-head">
-            <div>
-              <h2 className="shelf-title">مختارات النهارده</h2>
-              <p className="shelf-hook">من كل لون حاجة، على ذوقك</p>
-            </div>
-          </header>
           <div className="grid">
             {layout.picks.map((v) => (
               <VideoCard key={v.id} video={v} onHidden={hide} />
@@ -127,17 +113,11 @@ export default function FunPage() {
       )}
 
       {layout.shelves.map((s) => (
-        <Shelf key={s.key} title={s.title} hook={s.hook} videos={s.videos} onHidden={hide} />
+        <Shelf key={s.key} label={s.title} videos={s.videos} onHidden={hide} />
       ))}
 
       {layout.mix.length > 0 && (
         <section className="shelf">
-          <header className="shelf-head">
-            <div>
-              <h2 className="shelf-title">كمّل اتفرج</h2>
-              <p className="shelf-hook">خليط متوازن: صنعة وحكايات ومهارات</p>
-            </div>
-          </header>
           <div className="grid">
             {layout.mix.slice(0, shownMix).map((v) => (
               <VideoCard key={v.id} video={v} onHidden={hide} />
