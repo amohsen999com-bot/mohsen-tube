@@ -733,6 +733,22 @@ export function VideoDock() {
           </span>
         </div>
 
+        {/* Phones with YouTube's own controls: a tap layer that plays/pauses through the API (YouTube's phone
+            embed ignores some taps). It leaves the bottom strip free so YouTube's bar, with ⚙ for quality, stays tappable. */}
+        {ytControls && (
+          <div
+            className="yt-tap"
+            onClick={() => {
+              togglePlay();
+              wakeControls();
+            }}
+          >
+            <span className={`yt-tap-ico ${isPlaying ? "" : "show"}`} aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d={PLAY_PATH} /></svg>
+            </span>
+          </div>
+        )}
+
         {/* Phones: middle controls like YouTube (previous · play/pause · next); double tap on a side still seeks 10s */}
         <div className="dock-mid" dir="ltr">
           <button type="button" className="mid-skip" aria-label="الفيديو اللي قبله" disabled={!canGoBack} onClick={skipToPrev}>
