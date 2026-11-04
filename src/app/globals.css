@@ -1364,3 +1364,10 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
 .dock.yt-native .yt-crop-mask iframe { pointer-events: auto !important; }
 .dock.yt-native .dock-tap, .dock.yt-native .dock-mid, .dock.yt-native .ctl, .dock.yt-native .yt-brand-shield,
 .dock.yt-native .dock-video::after { display: none !important; }
+
+/* موبايل + أزرار يوتيوب: طبقة شفافة — لمسة تشغّل/توقّف. وهو واقف بتسيب صف يوتيوب اللي فوق (⚙ الجودة) واللي تحت (الشريط) */
+.yt-tap { display: none; }
+@media (hover: none), (pointer: coarse) {
+  .dock.yt-native:not(.mini) .yt-tap { display: block; position: absolute; inset: 0; z-index: 4; -webkit-tap-highlight-color: transparent; }
+  .dock.yt-native:not(.mini) .yt-tap.paused { top: 52px; bottom: 64px; left: 18%; right: 18%; }
+}
