@@ -1342,3 +1342,19 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
 .legal h2 { font-size: 19px; margin: 26px 0 6px; color: var(--gold-soft); }
 .legal p, .legal li { color: var(--text); opacity: .92; }
 .legal ul { padding-inline-start: 22px; margin: 6px 0; }
+
+/* البانر على الموبايل: أصغر وأهدى — عنوان سطرين، وأزرار وأيقونات صغيرة على قدّ الصباع */
+@media (max-width: 600px) {
+  .hero { height: 52vh; min-height: 300px; }
+  .hero-info { right: 14px; bottom: 9%; width: calc(100% - 70px); }
+  .hero-tag { font-size: 12px; margin-bottom: 6px; padding-right: 6px; border-right-width: 2px; }
+  .hero h1 { font-size: 17px; line-height: 1.45; margin-bottom: 4px; -webkit-line-clamp: 2; }
+  .hero-ch { font-size: 12.5px; margin-bottom: 10px; }
+  .hero-bar { height: 3px; width: 160px; margin-bottom: 12px; }
+  .hero-btns { gap: 8px; }
+  .hero-play, .hero-more { height: 34px; padding: 0 14px; font-size: 13.5px; gap: 6px; border-radius: 8px; }
+  .hero-play svg, .hero-more svg { width: 14px; height: 14px; }
+  .hero-ctrls { left: 12px; bottom: 9%; gap: 8px; }
+  .hero-mute { width: 32px; height: 32px; }
+  .hero-mute svg { width: 15px; height: 15px; }
+}
