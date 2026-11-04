@@ -24,6 +24,7 @@ const PLAY_PATH =
 const PAUSE_PATH = "M7 5h3.4v14H7zM13.6 5H17v14h-3.4z";
 const NEXT_PATH = "M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z";
 const PREV_PATH = "M6 6h2v12H6zm3.5 6l8.5 6V6z";
+const GEAR_PATH = "M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.6h4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z";
 /** Where a touch falls along a bar (0..1). The phone fullscreen fallback rotates the player 90°, so the bar runs top→bottom. */
 function alongBar(rect: DOMRect, x: number, y: number): number {
   const f = rect.height > rect.width ? (y - rect.top) / rect.height : (x - rect.left) / rect.width;
@@ -83,6 +84,8 @@ export function VideoDock() {
   const [controlsVisible, setControlsVisible] = useState(true);
   /** Cover image only until the first frame plays and after the end; a normal pause keeps the frozen frame */
   const [showCover, setShowCover] = useState(true);
+  /** YouTube can't be told the quality from outside, so "الجودة" uncovers YouTube's own control bar (with its ⚙ menu) */
+  const [ytControls, setYtControls] = useState(false);
   const [volume, setVolume] = useState(100);
   const [isMuted, setIsMuted] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -355,7 +358,8 @@ export function VideoDock() {
     const iframe = document.createElement("iframe");
     const params = new URLSearchParams({
       autoplay: "1",
-      controls: "0",
+      // YouTube's bar is loaded but cropped out of view and unclickable, until "الجودة" uncovers it
+      controls: "1",
       disablekb: "1",
       fs: "0",
       iv_load_policy: "3",
@@ -686,7 +690,7 @@ export function VideoDock() {
         hidden={!currentVideo}
         className={`dock ${isMini ? "mini" : ""} ${
           controlsVisible ? "ctl-on" : ""
-        } ${!isPlaying ? "is-paused" : ""} ${isFullscreen ? "is-full" : ""}`}
+        } ${!isPlaying ? "is-paused" : ""} ${isFullscreen ? "is-full" : ""} ${ytControls ? "yt-native" : ""}`}
         style={dockStyle}
         onPointerMove={wakeControls}
         onPointerLeave={() => {
@@ -727,6 +731,12 @@ export function VideoDock() {
             </svg>
           </span>
         </div>
+
+        {ytControls && (
+          <button type="button" className="yt-back" onClick={() => setYtControls(false)}>
+            رجوع لأزرارنا
+          </button>
+        )}
 
         {/* Phones: middle controls like YouTube (previous · play/pause · next); double tap on a side still seeks 10s */}
         <div className="dock-mid" dir="ltr">
@@ -775,6 +785,21 @@ export function VideoDock() {
             >
               <svg viewBox="0 0 24 24">
                 <path d={isPlaying ? PAUSE_PATH : PLAY_PATH} />
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              className="ctl-quality"
+              aria-label="الجودة"
+              title="الجودة"
+              onClick={() => {
+                setYtControls(true);
+                showToast("اختار الجودة من علامة ⚙ تحت في المشغّل", 3500);
+              }}
+            >
+              <svg viewBox="0 0 26 26">
+                <path d={GEAR_PATH} />
               </svg>
             </button>
 

@@ -1358,3 +1358,13 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
   .hero-mute { width: 32px; height: 32px; }
   .hero-mute svg { width: 15px; height: 15px; }
 }
+
+/* "الجودة": بنكشف شريط يوتيوب نفسه (فيه ⚙ للجودة) ونخبّي أزرارنا، وزرار صغير يرجّعك لأزرارنا */
+.dock.yt-native .yt-crop-mask { top: 0; height: 100%; pointer-events: auto; }
+.dock.yt-native .yt-crop-mask iframe { pointer-events: auto !important; }
+.dock.yt-native .dock-tap, .dock.yt-native .dock-mid, .dock.yt-native .ctl, .dock.yt-native .yt-brand-shield,
+.dock.yt-native .dock-video::after { display: none !important; }
+.yt-back { position: absolute; top: 10px; left: 10px; z-index: 6; height: 32px; padding: 0 14px; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 13px; font-weight: 700; color: var(--gold); background: rgba(40, 6, 18, .88);
+  border: 1px solid rgba(214, 176, 98, .7); box-shadow: 0 6px 18px rgba(0, 0, 0, .5); }
+.ctl-quality svg { width: 21px !important; height: 21px !important; }
