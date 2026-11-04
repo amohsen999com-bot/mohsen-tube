@@ -1487,7 +1487,9 @@ body.hdr-hide .chips-bar { top: -80px; }
   .ch-avatar { width: 72px; height: 72px; font-size: 30px; }
   .ch-info h1 { font-size: 22px; }
   .ch-sub { grid-column: 1 / -1; width: 100%; }
-  .ch-tabs { position: sticky; top: var(--hdr-h, 64px); z-index: 5; background: var(--bg); margin: 0 -16px 14px; padding: 0 16px; }
+  .ch-tabs { position: sticky; top: var(--hdr-h, 64px); z-index: 5; background: var(--bg); margin: 0 -16px 14px; padding: 0 16px; transition: top .45s var(--ease); }
+  /* زي شريط المواضيع: وإنت نازل يطلع مع الصفحة على طول، وإنت طالع يرجع تحت الهيدر */
+  body.hdr-hide .ch-tabs { top: -70px; }
   .ch-tabs button { flex: 1; }
   .pl-view { grid-template-columns: 1fr; }
   .pl-side { position: static; }
