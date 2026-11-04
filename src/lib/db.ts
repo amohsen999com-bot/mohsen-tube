@@ -925,3 +925,72 @@ export function updateRoom(input: {
     .run(clean.vid, clean.t, input.playing ? 1 : 0, clean.by, Date.now() / 1000, row.code);
   return getRoom(row.code);
 }
+
+/**
+ * Search box suggestions like YouTube's: short completions of what's being typed, not whole video titles.
+ * Sources: channel names that match, and phrases that start with the typed words inside many titles
+ * (cut at separators like | - : ، and kept to a few words). Ranked: channels first, then most frequent phrases.
+ */
+const SUGGEST_SPLIT = /[|\-–—:،,؛;(){}\[\]_•/\\"«»!?؟#]+/;
+const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu;
+
+export function searchSuggestions(rawQ: string, max = 10): string[] {
+  const q = rawQ.trim().replace(/\s+/g, " ");
+  const qWords = q.split(" ").map(normArabic).filter(Boolean);
+  if (!qWords.length || q.length < 2) return [];
+  const lastIsPartial = !/\s$/.test(rawQ);
+
+  // does a run of title words starting at i match the typed words (the last one may be a prefix)?
+  const matchAt = (words: string[], i: number) =>
+    qWords.every((qw, k) => {
+      const w = words[i + k];
+      if (!w) return false;
+      return k === qWords.length - 1 && lastIsPartial ? w.startsWith(qw) : w === qw;
+    });
+
+  const nqLen = normArabic(q).length;
+  const out = new Map<string, number>();
+  const add = (s: string, score: number) => {
+    s = s.trim();
+    const key = normArabic(s);
+    if (key.length <= nqLen || key === normArabic(q)) return;
+    out.set(s, Math.max(out.get(s) || 0, score));
+  };
+
+  // 1) channels
+  const db = getDb();
+  const nq = normArabic(q);
+  const chans = db.prepare(`SELECT name FROM channels`).all() as Array<{ name: string }>;
+  for (const { name } of chans) {
+    const clean = name.replace(/\(.*?\)/g, "").replace(EMOJI_RE, "").trim();
+    const nc = normArabic(clean);
+    const words = nc.split(/\s+/);
+    const starts = nc.startsWith(nq) || words.some((_, i) => matchAt(words, i));
+    if (starts) add(clean, 1000 - clean.length);
+  }
+
+  // 2) phrases from matching titles
+  const pool = searchVideos(q, { limit: 120 });
+  const counts = new Map<string, number>();
+  for (const v of pool) {
+    const title = v.t.replace(EMOJI_RE, " ");
+    for (const seg of title.split(SUGGEST_SPLIT)) {
+      const orig = seg.trim().split(/\s+/).filter((w) => w && !/^\d+$/.test(w));
+      const norm = orig.map(normArabic);
+      for (let i = 0; i < norm.length; i++) {
+        if (!matchAt(norm, i)) continue;
+        const take = Math.min(orig.length - i, Math.max(qWords.length + 1, 3), 5);
+        const phrase = orig.slice(i, i + take).join(" ").replace(/[.…]+$/, "");
+        if (phrase.length > 2) counts.set(phrase, (counts.get(phrase) || 0) + 1);
+        break;
+      }
+    }
+  }
+  for (const [p, n] of counts) add(p, n * 10 - p.length / 10);
+
+  return [...out.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([s]) => s)
+    .filter((s, i, arr) => arr.findIndex((x) => normArabic(x) === normArabic(s)) === i)
+    .slice(0, max);
+}

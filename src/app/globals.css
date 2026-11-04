@@ -1495,3 +1495,24 @@ body.hdr-hide .chips-bar { top: -80px; }
   .pl-side { position: static; }
   .pl-item { grid-template-columns: 22px 132px 1fr; gap: 10px; }
 }
+
+/* اقتراحات البحث زي يوتيوب: أيقونة (ساعة للي بحثت عنه قبل كده / عدسة)، الجزء اللي كتبته عادي والباقي بخط تقيل،
+   وعلى الطرف سهم يحط الاقتراح في الخانة من غير ما يبحث (أو ✕ يمسح بحث قديم) */
+.top .suggest.yt-suggest { list-style: none; margin: 0; padding: 8px 0; max-height: min(70vh, 520px); overflow-y: auto; }
+.yt-suggest li { display: flex; align-items: center; }
+.yt-suggest .sg-row { flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px; padding: 9px 16px; border: 0; background: none;
+  color: var(--text); font: inherit; font-size: 15.5px; text-align: right; cursor: pointer; }
+.yt-suggest li:hover { background: rgba(255, 255, 255, .06); }
+.yt-suggest .sg-ico { width: 20px; height: 20px; flex: none; fill: var(--muted); }
+.yt-suggest .sg-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yt-suggest .sg-text b { font-weight: 700; }
+.yt-suggest .sg-side { flex: none; width: 40px; height: 40px; margin-left: 6px; border: 0; border-radius: 50%; background: none; color: var(--muted);
+  display: grid; place-items: center; cursor: pointer; font-size: 15px; }
+.yt-suggest .sg-side:hover { color: var(--text); background: rgba(255, 255, 255, .08); }
+.yt-suggest .sg-side svg { width: 20px; height: 20px; fill: currentColor; transform: scaleX(-1); }
+/* أزرار الاقتراحات جوه فورم البحث: نلغي تنسيق زراير البحث الصغيرة المدوّرة */
+.top .search .yt-suggest .sg-row { display: flex !important; width: auto !important; height: auto !important; flex: 1; border-radius: 0 !important;
+  background: none !important; color: var(--text) !important; padding: 9px 16px; }
+.top .search .yt-suggest .sg-side { display: grid !important; width: 40px !important; height: 40px !important; border-radius: 50% !important;
+  background: none !important; color: var(--muted) !important; }
+.top .search .yt-suggest .sg-side:hover { background: rgba(255, 255, 255, .08) !important; color: var(--text) !important; }

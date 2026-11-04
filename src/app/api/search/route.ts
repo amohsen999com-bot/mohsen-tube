@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchVideos } from "@/lib/db";
+import { searchSuggestions, searchVideos } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   try {
@@ -7,6 +7,11 @@ export async function GET(request: NextRequest) {
     const q = (sp.get("q") || "").trim().slice(0, 120);
     if (!q) {
       return NextResponse.json({ results: [] });
+    }
+
+    // Autocomplete: short completions (YouTube-style), not video titles
+    if (sp.get("complete") === "1") {
+      return NextResponse.json({ suggestions: searchSuggestions(sp.get("q") || "") });
     }
 
     const durParam = sp.get("dur") || "";

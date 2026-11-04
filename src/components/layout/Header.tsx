@@ -3,8 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { VideoItem } from "@/lib/types";
 import { AlgoEngine } from "@/lib/client/algo";
+import { normArabic } from "@/lib/arabic";
 import { usePlayer } from "@/components/player/PlayerContext";
 import { LogoMark } from "./LogoMark";
 
@@ -18,13 +18,18 @@ const SEARCH_HINTS = [
   "جرّب: السيرة النبوية",
 ];
 
+const RECENT_KEY = "nt_recent_searches";
+const CLOCK_PATH = "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7z";
+const LENS_PATH = "M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z";
+
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const { showToast } = usePlayer();
 
   const [query, setQuery] = useState("");
-  const [suggestions, setSuggestions] = useState<VideoItem[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [recent, setRecent] = useState<string[]>([]);
   const [showSuggest, setShowSuggest] = useState(false);
   const [hasSpeech, setHasSpeech] = useState(false);
   const [listening, setListening] = useState(false);
@@ -130,7 +135,12 @@ export function Header() {
     return () => clearInterval(id);
   }, [query]);
 
-  // Debounced search autocomplete suggestions
+  // Autocomplete like YouTube: short completions of the typed words (channels, common phrases), plus your recent searches
+  useEffect(() => {
+    try {
+      setRecent(JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"));
+    } catch {}
+  }, [showSuggest]);
   useEffect(() => {
     const q = query.trim();
     if (q.length < 2) {
@@ -139,24 +149,43 @@ export function Header() {
     }
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(
-          `/api/search?q=${encodeURIComponent(q)}&suggest=1`
-        );
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&complete=1`);
         if (!res.ok) return;
         const data = await res.json();
-        setSuggestions(data.results || []);
+        setSuggestions(data.suggestions || []);
       } catch {}
-    }, 180);
+    }, 150);
     return () => clearTimeout(timer);
   }, [query]);
 
+  const runSearch = (text: string) => {
+    const q = text.trim();
+    if (!q) return;
+    setQuery(q);
+    setShowSuggest(false);
+    inputRef.current?.blur();
+    AlgoEngine.recordSearch(q);
+    try {
+      const prev: string[] = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+      localStorage.setItem(RECENT_KEY, JSON.stringify([q, ...prev.filter((x) => x !== q)].slice(0, 12)));
+    } catch {}
+    router.push(`/search?q=${encodeURIComponent(q)}`);
+  };
+  const forgetRecent = (text: string) => {
+    const next = recent.filter((x) => x !== text);
+    setRecent(next);
+    try {
+      localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+    } catch {}
+  };
+  // what the list shows: matching recent searches first (clock icon), then completions
+  const typed = query.trim();
+  const recentShown = recent.filter((r) => !typed || r.startsWith(typed)).slice(0, typed ? 3 : 8);
+  const suggestShown = typed.length >= 2 ? suggestions.filter((s) => !recentShown.includes(s)).slice(0, 10 - recentShown.length) : [];
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const q = query.trim();
-    if (!q) return;
-    setShowSuggest(false);
-    AlgoEngine.recordSearch(q);
-    router.push(`/search?q=${encodeURIComponent(q)}`);
+    runSearch(query);
   };
 
   const handleVoiceSearch = () => {
@@ -190,9 +219,7 @@ export function Header() {
       const text = results.map((x) => x[0].transcript).join(" ");
       setQuery(text);
       if (results[results.length - 1]?.isFinal && text.trim()) {
-        setShowSuggest(false);
-        AlgoEngine.recordSearch(text.trim());
-        router.push(`/search?q=${encodeURIComponent(text.trim())}`);
+        runSearch(text);
       }
     };
     rec.onend = () => {
@@ -283,19 +310,46 @@ export function Header() {
           </svg>
         </button>
 
-        {showSuggest && suggestions.length > 0 && (
-          <div className="suggest">
-            {suggestions.map((v) => (
-              <Link
-                key={v.id}
-                href={`/watch/${v.id}`}
-                onClick={() => setShowSuggest(false)}
-              >
-                <span className="s-ico">⌕</span>
-                <span>{v.t}</span>
-              </Link>
-            ))}
-          </div>
+        {showSuggest && (recentShown.length > 0 || suggestShown.length > 0) && (
+          <ul className="suggest yt-suggest" role="listbox">
+            {[...recentShown.map((t) => ({ t, recent: true })), ...suggestShown.map((t) => ({ t, recent: false }))].map(({ t, recent: isRecent }) => {
+              // the typed part stays regular, the completion is bold (compared without hamzas/diacritics)
+              const head = typed && normArabic(t).startsWith(normArabic(typed)) ? t.slice(0, typed.length) : "";
+              return (
+                <li key={(isRecent ? "r:" : "s:") + t} role="option" aria-selected={false}>
+                  <button type="button" className="sg-row" onMouseDown={(e) => e.preventDefault()} onClick={() => runSearch(t)}>
+                    <svg className="sg-ico" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d={isRecent ? CLOCK_PATH : LENS_PATH} />
+                    </svg>
+                    <span className="sg-text">
+                      {head}
+                      <b>{t.slice(head.length)}</b>
+                    </span>
+                  </button>
+                  {isRecent ? (
+                    <button type="button" className="sg-side" aria-label="امسح من البحث السابق" onMouseDown={(e) => e.preventDefault()} onClick={() => forgetRecent(t)}>
+                      ✕
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="sg-side"
+                      aria-label="حطّها في خانة البحث"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setQuery(t + " ");
+                        inputRef.current?.focus();
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M17 7H9.4l9.3 9.3-1.4 1.4L8 8.4V16H6V5h11z" />
+                      </svg>
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         )}
       </form>
 
