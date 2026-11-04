@@ -765,10 +765,12 @@ export function VideoDock() {
           </button>
         )}
 
-        {/* Phones: YouTube's phone embed ignores taps while a video plays, so an invisible layer pauses it on tap.
-            It exists only while playing: once paused it is gone entirely, so YouTube's own play button, ⚙ menu,
-            quality list and seek bar get every tap and scroll. */}
-        {ytControls && isPlaying && <div className="yt-tap" onClick={togglePlay} />}
+        {/* YouTube's "copy link / watch on YouTube" button sits bottom-left (Arabic layout). It can't be removed from
+            YouTube's player, so a transparent pad over that corner swallows taps on it. */}
+        {ytControls && !isMini && <div className="yt-link-block" aria-hidden="true" onClick={(e) => e.stopPropagation()} />}
+        {/* Computers: YouTube pauses on a click anywhere on the picture; this pad over the middle makes the
+            pause button in YouTube's bar the only way. Phones don't get it (a tap there just shows YouTube's buttons). */}
+        {ytControls && !isMini && <div className="yt-click-block" aria-hidden="true" />}
 
         {/* Phones: middle controls like YouTube (previous · play/pause · next); double tap on a side still seeks 10s */}
         <div className="dock-mid" dir="ltr">

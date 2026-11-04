@@ -1365,14 +1365,16 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
 .dock.yt-native .dock-tap, .dock.yt-native .dock-mid, .dock.yt-native .ctl, .dock.yt-native .yt-brand-shield,
 .dock.yt-native .dock-video::after { display: none !important; }
 
-/* موبايل + أزرار يوتيوب: طبقة شفافة وقت التشغيل بس — لمسة توقّف، ووهو واقف كل اللمس بيروح ليوتيوب (التشغيل، ⚙، الجودة، الشريط) */
-.yt-tap { display: none; }
-@media (hover: none), (pointer: coarse) {
-  .dock.yt-native:not(.mini) .yt-tap { display: block; position: absolute; inset: 0; z-index: 4; -webkit-tap-highlight-color: transparent; }
-}
+/* زرار "نسخ الرابط / افتح في يوتيوب" اللي تحت على الشمال جوه مشغّل يوتيوب: طبقة شفافة فوقه بتلغي لمسه */
+.yt-link-block { position: absolute; left: 0; bottom: 0; width: 60px; height: 56px; z-index: 5; }
 
 /* زرار ملء الشاشة بتاعنا: أقصى اليمين تحت، فوق شريط يوتيوب. بيكبّر ويلف الشاشة بالعرض */
 .yt-fs { position: absolute; right: 8px; bottom: 8px; z-index: 5; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
   border: 0; cursor: pointer; color: #fff; background: rgba(0, 0, 0, .45); -webkit-tap-highlight-color: transparent; }
 .yt-fs svg { width: 22px; height: 22px; fill: currentColor; }
 .yt-fs:active { transform: scale(.92); }
+/* الكمبيوتر: الضغط في نص الفيديو ما يوقفوش — التوقيف من زرار يوتيوب في الشريط بس */
+.yt-click-block { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .dock.yt-native:not(.mini) .yt-click-block { display: block; position: absolute; left: 0; right: 0; top: 60px; bottom: 56px; z-index: 4; }
+}
