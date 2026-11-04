@@ -3,6 +3,7 @@ import "./globals.css";
 import { PlayerProvider } from "@/components/player/PlayerContext";
 import { Header } from "@/components/layout/Header";
 import { VideoDock } from "@/components/player/VideoDock";
+import { SignInGate } from "@/components/modals/SignInGate";
 
 export const metadata: Metadata = {
   title: "محسن تيوب",
@@ -44,6 +45,7 @@ export default function RootLayout({
           <Header />
           <main id="app">{children}</main>
           <VideoDock />
+          <SignInGate />
         </PlayerProvider>
       </body>
     </html>

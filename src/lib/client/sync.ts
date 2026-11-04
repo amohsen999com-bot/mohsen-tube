@@ -217,6 +217,17 @@ export async function sendMagicLink(email: string): Promise<boolean> {
   return res.ok;
 }
 
+/**
+ * One-tap sign-in with Google: Supabase sends the viewer to Google and back here with the session in
+ * the URL hash (same shape as the magic link), which captureAuthRedirect() picks up.
+ */
+export function signInWithGoogle(): void {
+  if (!cloudConfigured()) return;
+  window.localStorage.setItem(PENDING_KEY, String(Date.now()));
+  const back = window.location.origin + window.location.pathname;
+  window.location.href = `${SB_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(back)}`;
+}
+
 /** If the URL hash carries a fresh sign-in, store the session and clean the URL. */
 export function captureAuthRedirect(): boolean {
   if (!hasWindow() || !window.location.hash.includes("access_token=")) return false;

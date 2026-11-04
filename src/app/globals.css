@@ -1309,3 +1309,28 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
   .ctl-time { white-space: nowrap; margin-left: 4px; }
   .ctl-chap { display: none; }
 }
+
+/* =====================================================================
+   أول شاشة: تسجيل الدخول بزرار واحد. نفس هوية كارت الترحيب (نبيتي ودهبي على زجاج غامق).
+   ===================================================================== */
+.sg-overlay { position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; padding: 16px;
+  background: radial-gradient(900px 520px at 50% 0%, rgba(122, 10, 38, .5), transparent 70%), rgba(10, 8, 11, .9);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); animation: obFade .45s var(--ease, ease) both; }
+.sg-card { width: min(420px, 100%); display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: 40px 28px 22px; border-radius: 26px; border: 1px solid rgba(210, 159, 34, .28);
+  background: linear-gradient(180deg, rgba(46, 12, 24, .96) 0%, rgba(30, 27, 31, .98) 45%, rgba(25, 23, 27, .98) 100%);
+  box-shadow: 0 40px 90px -30px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(255, 255, 255, .06); animation: obRise .6s var(--ease, ease) both; }
+.sg-mark { width: 64px; height: 64px; margin-bottom: 16px; filter: drop-shadow(0 10px 24px rgba(0, 0, 0, .5)); }
+.sg-title { margin: 0; font-family: "Cairo", "Noto Sans Arabic", sans-serif; font-size: 32px; font-weight: 800; letter-spacing: -.4px; color: #f4efe4; }
+.sg-gold { color: #e2b54a; }
+.sg-sub { margin: 6px 0 28px; font-size: 15px; color: var(--muted); }
+.sg-google { width: 100%; height: 54px; display: flex; align-items: center; justify-content: center; gap: 12px; border: 0; border-radius: 999px;
+  font: inherit; font-size: 17px; font-weight: 700; color: #1f1f1f; background: #fff; cursor: pointer;
+  box-shadow: 0 10px 28px -10px rgba(0, 0, 0, .7); transition: transform .15s var(--ease, ease), box-shadow .2s; }
+.sg-google:hover { box-shadow: 0 14px 34px -10px rgba(0, 0, 0, .8), 0 0 0 4px rgba(210, 159, 34, .25); }
+.sg-google:active { transform: scale(.98); }
+.sg-google:disabled { opacity: .7; cursor: default; }
+.sg-google svg { width: 22px; height: 22px; flex: none; }
+.sg-note { margin: 14px 0 0; font-size: 12.5px; line-height: 1.6; color: rgba(163, 158, 147, .85); }
+.sg-later { margin-top: 18px; padding: 6px 14px; border: 0; background: none; font: inherit; font-size: 14px; color: var(--muted); cursor: pointer; }
+.sg-later:hover { color: var(--text); }
