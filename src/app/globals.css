@@ -1275,8 +1275,8 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
 }
 
 /* =====================================================================
-   تحكم الموبايل في نص الفيديو بهوية الموقع: رجّع ١٠ · تشغيل/إيقاف · قدّم ١٠ — متماثلين في النص بالظبط.
-   لمسة تظهرهم مع تعتيم نبيتي خفيف، ولمسة تخفيهم. "اللي بعده" في الشريط اللي تحت. على الكمبيوتر مش موجودين.
+   تحكم الموبايل في نص الفيديو بهوية الموقع: اللي قبله · تشغيل/إيقاف · اللي بعده — متماثلين في النص بالظبط.
+   لمسة تظهرهم مع تعتيم نبيتي خفيف، ولمسة تخفيهم. على الكمبيوتر مش موجودين.
    ===================================================================== */
 .dock-mid { position: absolute; inset: 0; z-index: 3; display: none; align-items: center; justify-content: center; gap: 34px;
   pointer-events: none; opacity: 0; transition: opacity .3s var(--ease);
@@ -1285,8 +1285,8 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
   -webkit-tap-highlight-color: transparent; transition: transform .15s var(--ease); }
 .dock-mid button:active { transform: scale(.92); }
 .dock-mid .mid-skip { width: 48px; height: 48px; border-radius: 50%; background: none; color: #f4efe4; }
-.dock-mid .mid-skip svg { width: 34px; height: 34px; fill: currentColor; opacity: .92; }
-.dock-mid .mid-skip b { position: absolute; top: 55%; left: 50%; transform: translate(-50%, -50%); font: 700 10px/1 Roboto, sans-serif; color: #f4efe4; }
+.dock-mid .mid-skip svg { width: 30px; height: 30px; fill: currentColor; opacity: .92; }
+.dock-mid .mid-skip:disabled { opacity: .3; pointer-events: none; }
 .dock-mid .mid-play { width: 72px; height: 72px; border-radius: 50%; color: var(--gold);
   background: radial-gradient(circle at 35% 30%, #7a0a26 0%, #4f0c1f 70%); border: 1.5px solid rgba(214, 176, 98, .85);
   box-shadow: 0 10px 30px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .08); }
@@ -1302,10 +1302,10 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
   .dock-mid .mid-play { width: 64px; height: 64px; }
   .dock-mid .mid-play svg { width: 28px; height: 28px; }
 }
-/* شريط التحكم تحت على الموبايل: التشغيل في النص، والصوت والمسرح مش لازمين؛ "اللي بعده" جنب الوقت */
+/* شريط التحكم تحت على الموبايل: التشغيل واللي بعده في النص، والصوت والمسرح مش لازمين */
 @media (hover: none), (pointer: coarse) {
   .ctl-row > button:first-child, .ctl-volbox, .ctl-row button[title="وضع المسرح"] { display: none; }
-  .ctl-row .ctl-next { order: -1; margin-right: 2px; }
+  .ctl-row .ctl-next { display: none; }
   .ctl-time { white-space: nowrap; margin-left: 4px; }
   .ctl-chap { display: none; }
 }

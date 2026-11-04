@@ -17,13 +17,13 @@ import {
   recordWirdWatchSeconds,
 } from "@/lib/client/prayer";
 import { formatDuration } from "@/lib/arabic";
+import type { VideoItem } from "@/lib/types";
 
 const PLAY_PATH =
   "M8 5.2v13.6c0 .8.9 1.3 1.6.8l10.3-6.8c.6-.4.6-1.2 0-1.6L9.6 4.4C8.9 3.9 8 4.4 8 5.2z";
 const PAUSE_PATH = "M7 5h3.4v14H7zM13.6 5H17v14h-3.4z";
 const NEXT_PATH = "M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z";
-const BACK10_PATH = "M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z";
-const FWD10_PATH = "M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z";
+const PREV_PATH = "M6 6h2v12H6zm3.5 6l8.5 6V6z";
 /** Where a touch falls along a bar (0..1). The phone fullscreen fallback rotates the player 90°, so the bar runs top→bottom. */
 function alongBar(rect: DOMRect, x: number, y: number): number {
   const f = rect.height > rect.width ? (y - rect.top) / rect.height : (x - rect.left) / rect.width;
@@ -110,6 +110,21 @@ export function VideoDock() {
   sleepModeRef.current = sleepMode;
   const currentVideoRef = useRef(currentVideo);
   currentVideoRef.current = currentVideo;
+
+  // "اللي قبله": the videos watched before this one in this visit (newest last), like a browser's back
+  const backStackRef = useRef<VideoItem[]>([]);
+  const lastVideoRef = useRef<VideoItem | null>(null);
+  const goingBackRef = useRef(false);
+  const [canGoBack, setCanGoBack] = useState(false);
+  useEffect(() => {
+    const last = lastVideoRef.current;
+    if (currentVideo && last && last.id !== currentVideo.id) {
+      if (goingBackRef.current) goingBackRef.current = false;
+      else backStackRef.current = [...backStackRef.current.filter((v) => v.id !== last.id), last].slice(-50);
+    }
+    if (currentVideo) lastVideoRef.current = currentVideo;
+    setCanGoBack(backStackRef.current.length > 0);
+  }, [currentVideo]);
   const startAtRef = useRef(startAt);
   startAtRef.current = startAt;
   const upNextRef = useRef(upNext);
@@ -244,6 +259,18 @@ export function VideoDock() {
   };
 
   // Ask the player itself, not our state: after a jump or a tab switch the two can disagree
+  const skipToPrev = () => {
+    const prev = backStackRef.current.pop();
+    setCanGoBack(backStackRef.current.length > 0);
+    if (!prev) {
+      showToast("مفيش فيديو قبله");
+      return;
+    }
+    goingBackRef.current = true;
+    if (isMiniRef.current) playVideo(prev);
+    else router.push(`/watch/${encodeURIComponent(prev.id)}`);
+  };
+
   const togglePlay = () => {
     const p = playerRef.current;
     if (!p?.getPlayerState) return;
@@ -701,18 +728,16 @@ export function VideoDock() {
           </span>
         </div>
 
-        {/* Phones: middle controls like YouTube (back 10s · play/pause · forward 10s); "next" lives in the bottom bar */}
+        {/* Phones: middle controls like YouTube (previous · play/pause · next); double tap on a side still seeks 10s */}
         <div className="dock-mid" dir="ltr">
-          <button type="button" className="mid-skip" aria-label="رجّع ١٠ ثواني" onClick={() => { seekBy(-10); wakeControls(); }}>
-            <svg viewBox="0 0 24 24"><path d={BACK10_PATH} /></svg>
-            <b>10</b>
+          <button type="button" className="mid-skip" aria-label="الفيديو اللي قبله" disabled={!canGoBack} onClick={skipToPrev}>
+            <svg viewBox="0 0 24 24"><path d={PREV_PATH} /></svg>
           </button>
           <button type="button" className="mid-play" aria-label={isPlaying ? "إيقاف" : "تشغيل"} onClick={() => { togglePlay(); wakeControls(); }}>
             <svg viewBox="0 0 24 24"><path d={isPlaying ? PAUSE_PATH : PLAY_PATH} /></svg>
           </button>
-          <button type="button" className="mid-skip" aria-label="قدّم ١٠ ثواني" onClick={() => { seekBy(10); wakeControls(); }}>
-            <svg viewBox="0 0 24 24"><path d={FWD10_PATH} /></svg>
-            <b>10</b>
+          <button type="button" className="mid-skip" aria-label="الفيديو اللي بعده" onClick={skipToNext}>
+            <svg viewBox="0 0 24 24"><path d={NEXT_PATH} /></svg>
           </button>
         </div>
 
