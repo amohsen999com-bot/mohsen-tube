@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { allowRequest, clientIp } from "@/lib/rate-limit";
+import { getAggregatedLabels } from "@/lib/shared-store";
 import {
-  getAggregatedLabels,
   getCatalogSummary,
   getFeedVideos,
   getRelatedGraph,
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
     if (sp.get("summary") === "1") {
       const summary = getCatalogSummary();
-      const labels = getAggregatedLabels();
+      const labels = await getAggregatedLabels();
       return NextResponse.json({ ...summary, labels });
     }
 

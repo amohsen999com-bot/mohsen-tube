@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAggregatedLabels, saveViewerLabel, voterId } from "@/lib/db";
+import { voterId } from "@/lib/db";
+import { getAggregatedLabels, saveViewerLabel } from "@/lib/shared-store";
 import { allowRequest, clientIp } from "@/lib/rate-limit";
 
 export async function GET() {
-  return NextResponse.json(getAggregatedLabels());
+  return NextResponse.json(await getAggregatedLabels());
 }
 
 export async function POST(request: NextRequest) {
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     };
     // Only allowlisted answers are stored, the channel comes from the catalog, and each voter
     // (hashed IP) counts once per video/channel question.
-    const ok = saveViewerLabel({
+    const ok = await saveViewerLabel({
       vid: String(body.vid || ""),
       q: String(body.q || ""),
       a: Array.isArray(body.a) ? body.a.map(String) : [],

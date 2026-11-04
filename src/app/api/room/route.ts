@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createRoom, getRoom, joinRoom, updateRoom } from "@/lib/db";
+import { createRoom, getRoom, joinRoom, updateRoom } from "@/lib/shared-store";
 import { allowRequest, clientIp } from "@/lib/rate-limit";
 
 // Polling every 1.5s ≈ 40/min per viewer; leave headroom for a couple of tabs.
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "rate limited" }, { status: 429 });
   }
   const code = request.nextUrl.searchParams.get("code") || "";
-  const room = getRoom(code);
+  const room = await getRoom(code).catch(() => null);
   if (!room) {
     return NextResponse.json({ error: "no room" }, { status: 404 });
   }
@@ -51,20 +51,20 @@ export async function POST(request: NextRequest) {
     }
     const res =
       body.action === "create"
-        ? createRoom({
+        ? await createRoom({
             vid: String(body.vid || ""),
             t: Number(body.t || 0),
             playing: Boolean(body.playing),
             by: String(body.by || ""),
           })
-        : joinRoom(String(body.code || ""));
+        : await joinRoom(String(body.code || ""));
     if (!res) {
       return NextResponse.json({ error: body.action === "join" ? "no room" : "bad" }, { status: body.action === "join" ? 404 : 400 });
     }
     return NextResponse.json(res);
   }
 
-  const room = updateRoom({
+  const room = await updateRoom({
     code: String(body.code || ""),
     token: String(body.token || ""),
     vid: String(body.vid || ""),
