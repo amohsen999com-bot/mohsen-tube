@@ -733,9 +733,10 @@ export function VideoDock() {
           </span>
         </div>
 
-        {/* Phones: YouTube's phone embed often ignores taps. An invisible layer plays/pauses on tap through the API.
-            While paused it shrinks to the middle, so YouTube's top row (⚙ quality, sound) and bottom row (seek bar) stay tappable. */}
-        {ytControls && <div className={`yt-tap ${isPlaying ? "" : "paused"}`} onClick={togglePlay} />}
+        {/* Phones: YouTube's phone embed ignores taps while a video plays, so an invisible layer pauses it on tap.
+            It exists only while playing: once paused it is gone entirely, so YouTube's own play button, ⚙ menu,
+            quality list and seek bar get every tap and scroll. */}
+        {ytControls && isPlaying && <div className="yt-tap" onClick={togglePlay} />}
 
         {/* Phones: middle controls like YouTube (previous · play/pause · next); double tap on a side still seeks 10s */}
         <div className="dock-mid" dir="ltr">
