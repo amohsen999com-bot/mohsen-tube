@@ -5,7 +5,7 @@ import Link from "next/link";
 import { VideoItem } from "@/lib/types";
 import { formatDuration, formatRelativeArabicDate } from "@/lib/arabic";
 import { ClientStore } from "@/lib/client/store";
-import { AlgoEngine, getWhyLabel } from "@/lib/client/algo";
+import { AlgoEngine } from "@/lib/client/algo";
 import { usePlayer } from "@/components/player/PlayerContext";
 
 export function VideoCard({
@@ -90,7 +90,6 @@ export function VideoCard({
             {video.c}
             {video.dt ? ` • ${formatRelativeArabicDate(video.dt)}` : ""}
           </div>
-          {showWhy && <div className="card-why">{getWhyLabel(video)}</div>}
           <button
             type="button"
             className="card-more"
