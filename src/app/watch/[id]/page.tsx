@@ -16,6 +16,7 @@ import { QuoteModal } from "@/components/modals/QuoteModal";
 import { ClientStore, subscribeStore } from "@/lib/client/store";
 import { AlgoEngine } from "@/lib/client/algo";
 import { activeSeries, composeRelated, loadFeedPool, rememberSeries } from "@/lib/client/related";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 
 const DUAS = [
   "جزاك الله خيرًا",
@@ -237,7 +238,7 @@ export default function WatchPage({
   }, [detail?.transcript?.lines, transcriptQuery]);
 
   if (loading) {
-    return <p className="muted pad">جاري التحميل...</p>;
+    return <PageSkeleton kind="watch" />;
   }
 
   if (!detail?.video) {

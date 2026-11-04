@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { VideoItem } from "@/lib/types";
 import { formatDuration, formatRelativeArabicDate } from "@/lib/arabic";
 import { ClientStore } from "@/lib/client/store";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 
 function SearchContent() {
   const searchParams = useSearchParams();
@@ -157,7 +158,7 @@ function SearchContent() {
 
 export default function SearchPage() {
   return (
-    <Suspense fallback={<p className="muted pad">جاري التحميل...</p>}>
+    <Suspense fallback={<PageSkeleton kind="feed" />}>
       <SearchContent />
     </Suspense>
   );

@@ -1391,3 +1391,30 @@ body.hdr-hide .chips-bar { transform: translateY(calc(-100% - var(--hdr-h, 64px)
 /* أيقونات البانر: SVG أبيض (مش إيموجي) عشان تبان زي بعض على الكمبيوتر والموبايل */
 .hero-mute { display: grid; place-items: center; padding: 0; }
 .hero-mute svg { width: 20px; height: 20px; fill: currentColor; }
+
+/* =====================================================================
+   شاشة التحميل (Skeleton): شكل الصفحة بلون هادي، ولمعة خفيفة بتعدّي عليه
+   ===================================================================== */
+.sk-page { padding-top: 4px; }
+.sk { position: relative; overflow: hidden; background: rgba(255, 255, 255, .055); border-radius: 10px; }
+.sk::after { content: ""; position: absolute; inset: 0; transform: translateX(100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .07) 40%, rgba(214, 176, 98, .08) 50%, rgba(255, 255, 255, .07) 60%, transparent);
+  animation: skShine 1.4s ease-in-out infinite; }
+@keyframes skShine { to { transform: translateX(-100%); } }
+.sk-card { display: flex; flex-direction: column; gap: 12px; }
+.sk-thumb { aspect-ratio: 16 / 9; border-radius: 14px; }
+.sk-row { display: flex; gap: 12px; align-items: flex-start; }
+.sk-lines { flex: 1; display: flex; flex-direction: column; gap: 8px; padding-top: 2px; }
+.sk-line { height: 14px; border-radius: 7px; }
+.sk-line.short { width: 55%; }
+.sk-avatar { width: 36px; height: 36px; border-radius: 50%; flex: none; }
+.sk-avatar.big { width: 44px; height: 44px; }
+.sk-avatar.huge { width: 84px; height: 84px; }
+.sk-hero { height: min(52vh, 420px); border-radius: 18px; margin-bottom: 26px; }
+.sk-player { aspect-ratio: 16 / 9; border-radius: 14px; margin-bottom: 16px; }
+.sk-title { height: 22px; border-radius: 8px; margin-bottom: 10px; }
+.sk-title.short { width: 60%; margin-bottom: 18px; }
+.sk-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+.sk-pill { width: 88px; height: 36px; border-radius: 999px; }
+.sk-channel { margin-bottom: 26px; align-items: center; }
+@media (prefers-reduced-motion: reduce) { .sk::after { animation: none; } }

@@ -7,6 +7,7 @@ import { VideoCard } from "@/components/video/VideoCard";
 import { ClientStore } from "@/lib/client/store";
 import { usePlayer } from "@/components/player/PlayerContext";
 import { rememberSeries } from "@/lib/client/related";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 
 export default function ChannelPage({
   params,
@@ -56,7 +57,7 @@ export default function ChannelPage({
   }, [videos, selectedTopic]);
 
   if (loading) {
-    return <p className="muted pad">جاري التحميل...</p>;
+    return <PageSkeleton kind="channel" />;
   }
 
   if (!videos.length && !channel) {

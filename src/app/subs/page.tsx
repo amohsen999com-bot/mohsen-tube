@@ -5,6 +5,7 @@ import Link from "next/link";
 import { VideoItem } from "@/lib/types";
 import { VideoCard } from "@/components/video/VideoCard";
 import { ClientStore, subscribeStore } from "@/lib/client/store";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 
 export default function SubsPage() {
   const [subs, setSubs] = useState<string[]>([]);
@@ -85,7 +86,7 @@ export default function SubsPage() {
           )}
 
           {loading ? (
-            <p className="muted pad">جاري التحميل...</p>
+            <PageSkeleton kind="feed" />
           ) : (
             <div className="grid">
               {visible.map((v) => (

@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { VideoItem } from "@/lib/types";
 import { VideoCard } from "@/components/video/VideoCard";
 import { buildFunLayout, FunLayout } from "@/lib/client/fun";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 
 const MIX_PAGE = 24;
 
@@ -88,7 +89,7 @@ export default function FunPage() {
   }, [mixLength, shownMix]);
 
   if (!layout) {
-    return <p className="muted pad">جاري التحميل...</p>;
+    return <PageSkeleton kind="feed" />;
   }
 
   const hide = (id: string) =>

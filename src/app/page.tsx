@@ -9,6 +9,7 @@ import { OnboardingModal } from "@/components/modals/OnboardingModal";
 import { AlgoEngine } from "@/lib/client/algo";
 import { ClientStore, readLocal, subscribeStore } from "@/lib/client/store";
 import { getDayKey, getWird, getWirdStreak } from "@/lib/client/prayer";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 
 const FEED_BATCH = 24;
 
@@ -240,7 +241,7 @@ export default function HomePage() {
           }`;
 
   if (loading) {
-    return <p className="muted pad">جاري التحميل...</p>;
+    return <PageSkeleton kind="home" />;
   }
 
   const remainingResume = resumeVideos
