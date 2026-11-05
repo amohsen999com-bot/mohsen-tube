@@ -1519,3 +1519,9 @@ body.hdr-hide .chips-bar { top: -80px; }
 .top .search .yt-suggest .sg-side { display: grid !important; width: 40px !important; height: 40px !important; border-radius: 50% !important;
   background: none !important; color: var(--muted) !important; }
 .top .search .yt-suggest .sg-side:hover { background: rgba(255, 255, 255, .08) !important; color: var(--text) !important; }
+
+/* viewport-fit=cover: keep the page itself clear of the camera cutout when the phone is sideways */
+body {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}

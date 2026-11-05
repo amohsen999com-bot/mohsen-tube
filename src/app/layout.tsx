@@ -19,6 +19,9 @@ export const viewport: Viewport = {
   themeColor: "#19171b",
   width: "device-width",
   initialScale: 1,
+  // Use the whole screen, including beside the camera cutout: without this, phones with a punch-hole camera
+  // letterbox fullscreen video away from the camera side, so one black bar ends up wider than the other.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
