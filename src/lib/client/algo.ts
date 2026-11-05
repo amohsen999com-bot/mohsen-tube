@@ -44,11 +44,37 @@ export function getVideoCategory(v: VideoItem): CategoryKind {
   return "ترفيه";
 }
 
+/**
+ * The feed's rhythm: 8 slots that repeat. Religious content gets 2 of every 8 at any hour. The goal is
+ * to make people love the deen gently over years, not to fill their screen with it.
+ */
 const RHYTHM: Record<"morning" | "afternoon" | "night", CategoryKind[]> = {
-  morning: ["وعظ", "عمل", "عمل", "ترفيه", "عمل", "وعظ"],
-  afternoon: ["وعظ", "عمل", "ترفيه", "وعظ", "عمل", "ترفيه"],
-  night: ["وعظ", "ترفيه", "وعظ", "عمل", "ترفيه", "وعظ"],
+  morning: ["عمل", "ترفيه", "وعظ", "عمل", "ترفيه", "عمل", "ترفيه", "وعظ"],
+  afternoon: ["ترفيه", "عمل", "وعظ", "ترفيه", "عمل", "ترفيه", "عمل", "وعظ"],
+  night: ["ترفيه", "وعظ", "ترفيه", "عمل", "ترفيه", "وعظ", "ترفيه", "عمل"],
 };
+
+/**
+ * "رزانة": how far apart similar things must be in the feed, whatever the scores say. A subscription,
+ * a like or "عايز أشوف حاجات زي دي أكتر" raises a channel or topic, but never lets it flood the screen.
+ */
+export const CALM = {
+  /** The same channel doesn't come back within this many cards... */
+  channelGap: 8,
+  /** ...and shows at most this many times in any 20 cards. */
+  channelPer20: 2,
+  /** Subscribed channels together: at most 1 in any 4 cards. */
+  subsWindow: 4,
+  /** The same topic never twice in a row, and at most 3 in any 12 cards. */
+  topicGap: 1,
+  topicPer12: 3,
+  /** Religious content: at most 2 in any 8 cards. */
+  deenWindow: 8,
+  deenMax: 2,
+};
+
+/** What a running feed already showed, keyed by its recentChannels list (which lives as long as the feed). */
+const trails = new WeakMap<string[], VideoItem[]>();
 
 export function getRhythmSlots(hour = new Date().getHours()): CategoryKind[] {
   if (hour >= 5 && hour < 13) return RHYTHM.morning;
@@ -224,7 +250,8 @@ export function getVideoAffinity(v: VideoItem): number {
   if (sims.length) {
     a += 0.35 * Math.max(...sims.map((c) => Math.tanh(featureValue("c:" + c) / 2)));
   }
-  return a + getSessionAffinity(v);
+  // The mood nudges; it doesn't take over the screen
+  return a + 0.6 * getSessionAffinity(v);
 }
 
 // ---------- "Watched together" graph ----------
@@ -375,7 +402,7 @@ export const AlgoEngine = {
   },
 
   recordLike(v: VideoItem, liked: boolean): void {
-    learnFromVideo(v, liked ? 1.8 : -0.8);
+    learnFromVideo(v, liked ? 1.2 : -0.8);
   },
 
   recordSearch(query: string): void {
@@ -427,7 +454,7 @@ export const AlgoEngine = {
       const mood = learned ? getSessionAffinity(v) : 0;
       const tFit = getTimeFit(v);
       const quality = 0.55 * (v.s ?? v.r ?? 0.5) + 0.25 * (v.q ?? 0.5) + 0.2 * (v.hd ? 1 : 0);
-      const subBoost = subs.has(v.c) ? 0.65 : 0;
+      const subBoost = subs.has(v.c) ? 0.3 : 0;
       const skipPenalty = (getSkips(v.id)[0] || 0) * 0.35;
       const relScore = rel.get(v.id) || 0;
       const fresh = newFromLoved(v, subs, now);
@@ -449,23 +476,40 @@ export const AlgoEngine = {
 
     const pattern = getRhythmSlots();
     const out: VideoItem[] = [];
+    const trail = trails.get(recentChannels) || [];
+    trails.set(recentChannels, trail);
+    const last = (n: number) => (n > 0 ? trail.slice(-n) : []);
+    const isTopic = (tp?: string) => !!tp && tp !== "دروس عامة";
+
+    // Level 0 = every calm rule + the rhythm slot. Each level up relaxes one thing, only when nothing fits
+    // (e.g. a topic chip that leaves only one kind of video).
+    const fits = (x: (typeof scored)[number], wantCat: CategoryKind, level: number): boolean => {
+      const v = x.v;
+      if (usedIds.has(v.id)) return false;
+      if (level >= 4) return true;
+      if (recentChannels.slice(-(level >= 3 ? 3 : CALM.channelGap)).includes(v.c)) return false;
+      if (level >= 3) return true;
+      if (last(19).filter((p) => p.c === v.c).length >= CALM.channelPer20) return false;
+      if (subs.has(v.c) && last(CALM.subsWindow - 1).some((p) => subs.has(p.c))) return false;
+      if (
+        x.cat === "وعظ" &&
+        last(CALM.deenWindow - 1).filter((p) => getVideoCategory(p) === "وعظ").length >= CALM.deenMax
+      ) {
+        return false;
+      }
+      if (level >= 2) return true;
+      if (isTopic(v.tp)) {
+        if (last(CALM.topicGap).some((p) => p.tp === v.tp)) return false;
+        if (last(11).filter((p) => p.tp === v.tp).length >= CALM.topicPer12) return false;
+      }
+      return level >= 1 || x.cat === wantCat;
+    };
 
     for (let i = 0; i < count && scored.length > 0; i++) {
-      const wantCat = pattern[i % pattern.length];
-      const recentSlice = recentChannels.slice(-3);
-      let pickIdx = scored.findIndex(
-        (x) =>
-          x.cat === wantCat &&
-          !usedIds.has(x.v.id) &&
-          !recentSlice.includes(x.v.c)
-      );
-      if (pickIdx < 0) {
-        pickIdx = scored.findIndex(
-          (x) => !usedIds.has(x.v.id) && !recentSlice.includes(x.v.c)
-        );
-      }
-      if (pickIdx < 0) {
-        pickIdx = scored.findIndex((x) => !usedIds.has(x.v.id));
+      const wantCat = pattern[trail.length % pattern.length];
+      let pickIdx = -1;
+      for (let level = 0; level <= 4 && pickIdx < 0; level++) {
+        pickIdx = scored.findIndex((x) => fits(x, wantCat, level));
       }
       if (pickIdx < 0) break;
 
@@ -475,6 +519,7 @@ export const AlgoEngine = {
       else whyById.delete(chosen.id);
       usedIds.add(chosen.id);
       recentChannels.push(chosen.c);
+      trail.push(chosen);
       out.push(chosen);
     }
 

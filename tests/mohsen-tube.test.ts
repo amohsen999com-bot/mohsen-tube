@@ -351,3 +351,61 @@ describe("Astronomical Prayer Times Calculator", () => {
     assert.ok(times.maghrib < times.isha);
   });
 });
+
+describe("Calm feed (رزانة)", () => {
+  it("a subscribed, liked religious channel never floods the feed", async () => {
+    const mem = new Map<string, string>();
+    const g = globalThis as unknown as { window?: unknown };
+    const hadWindow = "window" in g;
+    g.window = {
+      localStorage: {
+        getItem: (k: string) => (mem.has(k) ? mem.get(k)! : null),
+        setItem: (k: string, v: string) => void mem.set(k, v),
+        removeItem: (k: string) => void mem.delete(k),
+      },
+      sessionStorage: { getItem: () => null, setItem: () => {} },
+    };
+    try {
+      const { AlgoEngine, CALM, getVideoCategory, learnFromVideo: learn, resetModelCache: reset } =
+        await import("../src/lib/client/algo.ts");
+      const { ClientStore } = await import("../src/lib/client/store.ts");
+      reset();
+      const pool: VideoItem[] = [];
+      const mk = (i: number, c: string, g: string, tp: string, s: number): VideoItem => ({
+        id: `v${String(i).padStart(10, "0")}`, t: `درس ${tp} رقم ${i}`, c, d: 1500, tp, g, r: s, s,
+      });
+      let n = 0;
+      for (let i = 0; i < 120; i++) pool.push(mk(n++, "القناة السلفية", "أنا السلفي", "عقيدة", 0.95));
+      for (let k = 0; k < 6; k++) for (let i = 0; i < 25; i++) pool.push(mk(n++, `شيخ ${k}`, "علماء", ["فقه", "رقائق", "تفسير"][k % 3], 0.8));
+      for (let k = 0; k < 8; k++) for (let i = 0; i < 25; i++) pool.push(mk(n++, `كورس ${k}`, "كورسات", ["برمجة", "إنجليزي", "تطوير الذات", "فيزياء"][k % 4], 0.6));
+      for (let k = 0; k < 8; k++) for (let i = 0; i < 25; i++) pool.push(mk(n++, `ورشة ${k}`, "اصنعها بنفسك", ["نجارة", "زراعة وتربية", "ترميم", "طبخ"][k % 4], 0.6));
+
+      ClientStore.toggleSub("القناة السلفية");
+      for (let i = 0; i < 6; i++) learn(pool[i], 1.8); // likes + "more like this" several times
+
+      const used = new Set<string>();
+      const recent: string[] = [];
+      const feed = [
+        ...AlgoEngine.buildFeedBatch(pool, 20, used, recent),
+        ...AlgoEngine.buildFeedBatch(pool, 20, used, recent),
+      ];
+      assert.equal(feed.length, 40);
+      const sub = feed.filter((v) => v.c === "القناة السلفية").length;
+      assert.ok(sub >= 2 && sub <= 4, `subscribed channel shows but doesn't flood: ${sub}/40`);
+      for (let i = 0; i < feed.length; i++) {
+        const win8 = feed.slice(Math.max(0, i - CALM.deenWindow + 1), i + 1);
+        assert.ok(win8.filter((v) => getVideoCategory(v) === "وعظ").length <= CALM.deenMax, `religious cap at ${i}`);
+        const prev = feed.slice(Math.max(0, i - CALM.channelGap), i).map((v) => v.c);
+        assert.ok(!prev.includes(feed[i].c), `channel gap at ${i}`);
+        if (i > 0) assert.notEqual(feed[i].tp, feed[i - 1].tp, `same topic twice at ${i}`);
+      }
+
+      // A topic chip with only one kind of video still fills (rules relax instead of leaving it empty)
+      const onlyAqeeda = pool.filter((v) => v.tp === "عقيدة");
+      assert.equal(AlgoEngine.buildFeedBatch(onlyAqeeda, 12, new Set(), []).length, 12);
+    } finally {
+      if (!hadWindow) delete g.window;
+      resetModelCache();
+    }
+  });
+});

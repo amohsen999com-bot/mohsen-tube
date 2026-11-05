@@ -177,7 +177,7 @@ export function VideoCard({
             type="button"
             role="menuitem"
             onClick={() => {
-              learnFromVideo(video, 1.6);
+              learnFromVideo(video, 0.9); // a gentle raise: the feed's calm rules still keep it spread out
               showToast("تمام، هنوريك حاجات زي دي أكتر");
               setMenuOpen(false);
             }}
