@@ -609,7 +609,18 @@ export function VideoDock() {
   // Leaving real fullscreen with the phone's back gesture / Esc must also leave our fullscreen layout
   useEffect(() => {
     const onChange = () => {
-      if (!document.fullscreenElement && realFullRef.current) {
+      const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+      const fsEl = document.fullscreenElement;
+      // YouTube's own fullscreen button puts its iframe in fullscreen: turn the phone sideways like the YouTube app
+      if (fsEl && fsEl.tagName === "IFRAME" && dockRef.current?.contains(fsEl)) {
+        orientation?.lock?.("landscape").catch(() => {});
+      }
+      if (!fsEl) {
+        try {
+          orientation?.unlock?.();
+        } catch {}
+      }
+      if (!fsEl && realFullRef.current) {
         realFullRef.current = false;
         setIsFullscreen(false);
       }
