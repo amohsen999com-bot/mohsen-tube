@@ -1525,3 +1525,6 @@ body {
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }
+
+/* Our fullscreen button under the video is for phones only; desktop uses YouTube's own */
+@media (pointer: fine) { .fs-btn { display: none !important; } }

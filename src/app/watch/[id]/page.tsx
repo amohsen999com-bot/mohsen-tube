@@ -335,6 +335,17 @@ export default function WatchPage({
 
             <button
               type="button"
+              className="btn icon-btn fs-btn"
+              onClick={() => window.dispatchEvent(new Event("nt:fullscreen"))}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 9V4h5v2H6v3H4zm11-5h5v5h-2V6h-3V4zM6 15v3h3v2H4v-5h2zm12 3v-3h2v5h-5v-2h3z" />
+              </svg>
+              <span>ملء الشاشة</span>
+            </button>
+
+            <button
+              type="button"
               className="btn icon-btn"
               onClick={() => setShareModalOpen(true)}
             >
