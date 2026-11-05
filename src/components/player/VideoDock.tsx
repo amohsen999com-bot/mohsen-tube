@@ -362,7 +362,7 @@ export function VideoDock() {
       autoplay: "1",
       controls: "1",
       disablekb: "1",
-      fs: "0", // YouTube's button sits on the far left in Arabic; ours (.yt-fs) is on the far right and turns sideways
+      fs: "1", // YouTube's own fullscreen button (we don't place anything over their player)
       iv_load_policy: "3",
       modestbranding: "1",
       rel: "0",
@@ -751,23 +751,7 @@ export function VideoDock() {
           </span>
         </div>
 
-        {/* Our fullscreen button, far right: fills the screen and turns it sideways */}
-        {ytControls && !isMini && (
-          <button
-            type="button"
-            className="yt-fs"
-            aria-label={isFullscreen ? "خروج من ملء الشاشة" : "ملء الشاشة"}
-            onClick={toggleFullscreen}
-          >
-            <svg viewBox="0 0 24 24">
-              <path d={isFullscreen ? UNFULL_PATH : FULL_PATH} />
-            </svg>
-          </button>
-        )}
-
-        {/* YouTube's "copy link / watch on YouTube" button sits bottom-left (Arabic layout). It can't be removed from
-            YouTube's player, so a transparent pad over that corner swallows taps on it. */}
-        {ytControls && !isMini && <div className="yt-link-block" aria-hidden="true" onClick={(e) => e.stopPropagation()} />}
+        {/* YouTube's player is never covered (their terms): fullscreen and the copy-link button are YouTube's own. */}
 
         {/* Phones: middle controls like YouTube (previous · play/pause · next); double tap on a side still seeks 10s */}
         <div className="dock-mid" dir="ltr">
