@@ -362,10 +362,9 @@ export function VideoDock() {
       autoplay: "1",
       controls: "1",
       disablekb: "1",
-      // Desktop: YouTube's own fullscreen button. Phones: ours (under the video, never over YouTube's player),
-      // because it puts our page in fullscreen, which uses the whole screen beside a punch-hole camera, while
-      // YouTube's fullscreen (inside its iframe) gets letterboxed away from the camera: one black bar wider.
-      fs: window.matchMedia?.("(pointer: coarse)").matches ? "0" : "1",
+      // Our own fullscreen button sits where YouTube's was (bottom right): it puts our page's player in fullscreen,
+      // which fills the whole screen on phones with a punch-hole camera. YouTube's in-iframe fullscreen doesn't.
+      fs: "0",
       iv_load_policy: "3",
       modestbranding: "1",
       rel: "0",
@@ -653,15 +652,6 @@ export function VideoDock() {
     wakeControls();
   };
 
-  // The watch page's "ملء الشاشة" button (phones) asks for our fullscreen through this event
-  const toggleFullscreenRef = useRef(toggleFullscreen);
-  toggleFullscreenRef.current = toggleFullscreen;
-  useEffect(() => {
-    const onAsk = () => toggleFullscreenRef.current();
-    window.addEventListener("nt:fullscreen", onAsk);
-    return () => window.removeEventListener("nt:fullscreen", onAsk);
-  }, []);
-
   const handleCycleSpeed = () => {
     const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
     setSpeed(next);
@@ -774,7 +764,23 @@ export function VideoDock() {
           </span>
         </div>
 
-        {/* YouTube's player is never covered (their terms): fullscreen and the copy-link button are YouTube's own. */}
+        {/* Fullscreen, in YouTube's spot (bottom right, YouTube's own button is off): enters/exits like YouTube's. */}
+        {!isMini && (
+          <button
+            type="button"
+            className="nt-fs"
+            aria-label={isFullscreen ? "خروج من ملء الشاشة" : "ملء الشاشة"}
+            title={isFullscreen ? "خروج من ملء الشاشة" : "ملء الشاشة"}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFullscreen();
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d={isFullscreen ? UNFULL_PATH : FULL_PATH} />
+            </svg>
+          </button>
+        )}
 
         {/* Phones: middle controls like YouTube (previous · play/pause · next); double tap on a side still seeks 10s */}
         <div className="dock-mid" dir="ltr">

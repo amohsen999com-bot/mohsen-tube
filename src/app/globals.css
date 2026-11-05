@@ -1373,19 +1373,6 @@ body.hdr-hide .chips-bar { top: -80px; }
   .dock.yt-native:not(.mini) .yt-link-block { display: block; position: absolute; left: 0; bottom: 0; width: 76px; height: 48px; z-index: 5; }
 }
 
-/* زرار ملء الشاشة بتاعنا: أقصى اليمين تحت، فوق شريط يوتيوب. بيكبّر ويلف الشاشة بالعرض */
-.yt-fs { position: absolute; right: 8px; bottom: 8px; z-index: 5; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
-  border: 0; cursor: pointer; color: #fff; background: rgba(0, 0, 0, .45); -webkit-tap-highlight-color: transparent; }
-.yt-fs svg { width: 22px; height: 22px; fill: currentColor; }
-.yt-fs:active { transform: scale(.92); }
-/* الموبايل: زرار ملء الشاشة أقصى الشمال تحت — قاعد بالظبط فوق زرار "نسخ الرابط" بتاع يوتيوب فبيغطيه */
-@media (hover: none), (pointer: coarse) {
-  .yt-fs { right: auto; left: 16px; bottom: 8px; width: 44px; height: 38px; z-index: 6; background: rgba(12, 10, 13, .88); }
-  /* في ملء الشاشة الركن بيتقص بانحناء الشاشة، فبنبعده أكتر لفوق ولليمين */
-  .dock.is-full .yt-fs, .dock:fullscreen .yt-fs { left: 34px; bottom: 18px; }
-  .dock.is-full .yt-link-block, .dock:fullscreen .yt-link-block { width: 96px; height: 64px; }
-}
-
 /* المكتبة: عنوان "مقاطعك" وجنبه نزّل/ارفع ملف المقاطع */
 .clips-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .clips-head .sec { margin: 0; }
@@ -1526,3 +1513,12 @@ body {
   padding-right: env(safe-area-inset-right);
 }
 
+
+/* زرار ملء الشاشة: مكان زرار يوتيوب بالظبط (تحت على اليمين جوه الفيديو)، وبيكبّر ويلف بالعرض ويخرج زيه */
+.nt-fs { position: absolute; right: 6px; bottom: 6px; z-index: 7; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; background: rgba(0, 0, 0, .38); cursor: pointer;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.nt-fs svg { width: 24px; height: 24px; fill: currentColor; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6)); }
+.nt-fs:active { transform: scale(.9); }
+/* في ملء الشاشة: بعيد شوية عن حواف الشاشة المنحنية */
+.dock.is-full .nt-fs, .dock:fullscreen .nt-fs { right: 16px; bottom: 14px; width: 46px; height: 46px; }
