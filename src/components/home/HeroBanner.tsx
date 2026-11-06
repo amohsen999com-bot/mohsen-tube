@@ -11,6 +11,7 @@ import {
   YTPlayerState,
 } from "@/lib/client/youtube-api";
 import { usePlayer } from "@/components/player/PlayerContext";
+import { Glyph } from "@/components/ui/Glyph";
 
 export function HeroBanner({
   video,
@@ -164,7 +165,7 @@ export function HeroBanner({
             href={`/watch/${video.id}`}
             onClick={handleGoWatch}
           >
-            ▶ {resuming ? "كمّل المشاهدة" : "شاهد"}
+            <Glyph name="play" /> {resuming ? "كمّل المشاهدة" : "شاهد"}
           </Link>
           <Link
             className="hero-more"

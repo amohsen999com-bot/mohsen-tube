@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { formatDuration } from "@/lib/arabic";
+import { Glyph } from "@/components/ui/Glyph";
 
 const MAX = 15 * 60;
 const toSec = (s: string) => String(s).trim().split(":").reduce((a, x) => a * 60 + (Number(x) || 0), 0);
@@ -118,7 +119,7 @@ export function ClipEditor({
   return (
     <div className="clip-box">
       <div className="clip-head">
-        <b>✂ قص جزء</b>
+        <b><Glyph name="scissors" /> قص جزء</b>
         <span className={`clip-len ${bad ? "bad" : ""}`}>{lenText}</span>
         <button type="button" aria-label="قفل" onClick={onClose}>
           ✕
@@ -210,7 +211,7 @@ export function ClipEditor({
           onChange={(ev) => setName(ev.target.value)}
         />
         <button type="button" className="btn" onClick={() => onPreview(s, e)}>
-          ▶ شوف المقطع
+          <Glyph name="play" /> شوف المقطع
         </button>
         <button type="button" className="btn" disabled={bad} onClick={() => onCopyLink(s, e)}>
           🔗 انسخ الرابط

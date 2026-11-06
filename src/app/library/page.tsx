@@ -22,6 +22,7 @@ import {
 import { formatDuration } from "@/lib/arabic";
 import { usePlayer } from "@/components/player/PlayerContext";
 import { AccountSection } from "@/components/library/AccountSection";
+import { Glyph } from "@/components/ui/Glyph";
 
 export default function LibraryPage() {
   const { showToast } = usePlayer();
@@ -153,10 +154,10 @@ export default function LibraryPage() {
                 showToast("نزل ملف مقاطعك على جهازك");
               }}
             >
-              ⬇ نزّل مقاطعك
+              <Glyph name="download" /> نزّل مقاطعك
             </button>
             <label className="btn">
-              ⬆ ارفع ملف مقاطع
+              <Glyph name="upload" /> ارفع ملف مقاطع
               <input
                 type="file"
                 accept="application/json,.json"
@@ -185,7 +186,7 @@ export default function LibraryPage() {
                 </p>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <Link className="btn gold" href={`/watch/${c.vid}?s=${c.s}&e=${c.e}`}>
-                    ▶ شغّل المقطع
+                    <Glyph name="play" /> شغّل المقطع
                   </Link>
                   <button
                     type="button"

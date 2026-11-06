@@ -259,7 +259,8 @@ body.ob-open { overflow: hidden; }
 .dock.mini .dock-bar { display: flex; align-items: center; gap: 4px; padding: 8px 10px; background: var(--panel); }
 .dock-title { flex: 1; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .dock-title:hover { color: var(--gold-soft); }
-.dock-bar button { width: 34px; height: 34px; border-radius: 50%; border: 0; background: transparent; color: var(--text); font-size: 16px; cursor: pointer; }
+.dock-bar button { width: 34px; height: 34px; border-radius: 50%; border: 0; background: transparent; color: var(--text); font-size: 16px; cursor: pointer;
+  display: grid; place-items: center; padding: 0; flex: none; }
 .dock-bar button:hover { background: var(--panel-2); color: var(--gold); }
 @keyframes dockIn { from { opacity: 0; transform: translateY(24px) scale(.96); } }
 @media (max-width: 760px) { .dock.mini { width: min(300px, 72vw); left: 12px; bottom: 12px; } }

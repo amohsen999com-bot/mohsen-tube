@@ -18,6 +18,7 @@ import {
 } from "@/lib/client/prayer";
 import { formatDuration } from "@/lib/arabic";
 import type { VideoItem } from "@/lib/types";
+import { Glyph } from "@/components/ui/Glyph";
 
 const PLAY_PATH =
   "M8 5.2v13.6c0 .8.9 1.3 1.6.8l10.3-6.8c.6-.4.6-1.2 0-1.6L9.6 4.4C8.9 3.9 8 4.4 8 5.2z";
@@ -986,17 +987,17 @@ export function VideoDock() {
                 }
               }}
             >
-              {isPlaying ? "⏸" : "▶"}
+              <Glyph name={isPlaying ? "pause" : "play"} size="20px" />
             </button>
             <button
               type="button"
               aria-label="كبّر"
               onClick={() => router.push(`/watch/${currentVideo.id}`)}
             >
-              ⤢
+              <Glyph name="expand" size="20px" />
             </button>
             <button type="button" aria-label="اقفل" onClick={closePlayer}>
-              ✕
+              <Glyph name="close" size="18px" />
             </button>
           </div>
         )}

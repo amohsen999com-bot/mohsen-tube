@@ -9,6 +9,7 @@ import { usePlayer } from "@/components/player/PlayerContext";
 import { rememberSeries } from "@/lib/client/related";
 import { formatDuration } from "@/lib/arabic";
 import { PageSkeleton } from "@/components/ui/Skeleton";
+import { Glyph } from "@/components/ui/Glyph";
 
 type Sort = "new" | "best" | "old";
 const SORTS: Array<[Sort, string]> = [
@@ -192,7 +193,7 @@ export default function ChannelPage({ params }: { params: Promise<{ name: string
               href={`/watch/${listVideos?.[0]?.id || openList.v[0]}`}
               onClick={() => rememberSeries(openList.id)}
             >
-              ▶ تشغيل الكل
+              <Glyph name="play" /> تشغيل الكل
             </Link>
           </div>
           <ol className="pl-list">
