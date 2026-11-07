@@ -824,11 +824,6 @@ export function VideoDock() {
       if (dy > 130 || (vy > 0.55 && dy > 40)) minimize();
       else reset(true);
     };
-    // No pull-to-refresh on the watch page (Chrome reads it from the root element), so the swipe never reloads
-    const root = document.documentElement;
-    const prevOverscroll = root.style.overscrollBehaviorY;
-    root.style.overscrollBehaviorY = "none";
-    document.body.style.overscrollBehaviorY = "none";
     document.addEventListener("touchstart", onStart, { passive: true });
     document.addEventListener("touchmove", onMove, { passive: false });
     document.addEventListener("touchend", onEnd, { passive: true });
@@ -840,14 +835,41 @@ export function VideoDock() {
       document.removeEventListener("touchcancel", onEnd);
       cancelAnimationFrame(raf);
       reset(false);
-      root.style.overscrollBehaviorY = prevOverscroll;
-      document.body.style.overscrollBehaviorY = "";
     };
   }, [isPhone, isMini, isFullscreen, currentVideo, minimize]);
 
   // Floating window → watch page, like YouTube: the window starts growing the moment you tap it, toward where
   // the video sits on its page (remembered from the last visit), so it's already big while the page loads.
   // When the page places the player, a short final glide closes any small gap. No fades fighting it.
+  // Switching to another video on the watch page (a suggestion): the new video's picture fades in over the
+  // player and fades out the moment it starts playing, so the switch looks calm instead of flashing YouTube's
+  // loading screen.
+  const [swapCover, setSwapCover] = useState<{ url: string; out: boolean } | null>(null);
+  const swapPrevRef = useRef<string | null>(null);
+  useEffect(() => {
+    const id = currentVideo?.id || null;
+    const prev = swapPrevRef.current;
+    swapPrevRef.current = id;
+    if (!id || !prev || prev === id || isMiniRef.current) return;
+    const v = currentVideo!;
+    setSwapCover({
+      url: "url(https://i.ytimg.com/vi/" + id + "/" + (v.hd ? "maxresdefault" : "hqdefault") + ".jpg), url(https://i.ytimg.com/vi/" + id + "/hqdefault.jpg)",
+      out: false,
+    });
+    const t = window.setTimeout(() => setSwapCover((c) => (c ? { ...c, out: true } : c)), 2500); // never stays long
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentVideo?.id]);
+  // showCover turns off on the new video's first played frame (it's set on again for every new video)
+  useEffect(() => {
+    if (!showCover && swapCover && !swapCover.out) setSwapCover({ ...swapCover, out: true });
+  }, [showCover, swapCover]);
+  useEffect(() => {
+    if (!swapCover?.out) return;
+    const t = window.setTimeout(() => setSwapCover(null), 320);
+    return () => window.clearTimeout(t);
+  }, [swapCover]);
+
   const lastSlotRef = useRef<{ left: number; top: number; width: number; height: number } | null>(null);
   useEffect(() => {
     if (!isMini && boxPosition && !isFullscreen) lastSlotRef.current = { ...boxPosition };
@@ -984,6 +1006,10 @@ export function VideoDock() {
             </svg>
           </span>
         </div>
+
+        {swapCover && !isMini && (
+          <div className={`swap-cover ${swapCover.out ? "out" : ""}`} style={{ backgroundImage: swapCover.url }} aria-hidden="true" />
+        )}
 
         {/* Phones: shrink to the floating window (YouTube's chevron, top left of the video) */}
         {!isMini && !isFullscreen && (

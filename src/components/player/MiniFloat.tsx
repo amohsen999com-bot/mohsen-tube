@@ -7,7 +7,6 @@
  * - لو رميته برّه الشاشة (يمين/شمال/تحت) بيطير ويتقفل.
  * - لمسة عليه: يفتح الفيديو على طول. زرار ✕ صغير في الركن بيقفله.
  * - وهو واقف: صورة الفيديو بدل شاشة يوتيوب (زرار التشغيل الكبير واللوجو).
- * - طول ما هو ظاهر، المتصفح ما يعملش "تحديث" لما تشد الصفحة لتحت (عشان الفيديو ما يقفش).
  * - لما ييجي من صفحة الفيديو (سحب لتحت) بيصغر من مكانه لحد الركن (FLIP).
  */
 import React, { useCallback, useEffect, useRef } from "react";
@@ -81,11 +80,6 @@ export function MiniFloat({
     el.style.willChange = "transform";
     el.style.width = "";
     el.style.animation = ""; // (the watch page turned its entrance fade off when it grew from here)
-    // No pull-to-refresh while the window floats: a reload would stop the video
-    const root = document.documentElement;
-    const prevOver = root.style.overscrollBehaviorY;
-    root.style.overscrollBehaviorY = "none";
-    document.body.style.overscrollBehaviorY = "none";
     el.style.transformOrigin = "0 0";
     if (from && from.width > 0) {
       apply(p.x, p.y, null);
@@ -114,8 +108,6 @@ export function MiniFloat({
       window.removeEventListener("resize", onResize);
       window.visualViewport?.removeEventListener("resize", onResize);
       cancelAnimationFrame(frame.current);
-      root.style.overscrollBehaviorY = prevOver;
-      document.body.style.overscrollBehaviorY = "";
       // Hand the element back clean (the watch page positions it again)
       el.style.transform = "";
       el.style.transition = "";

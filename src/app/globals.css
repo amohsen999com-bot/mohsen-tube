@@ -1676,8 +1676,6 @@ body {
     transition: transform .15s ease, background .15s ease; }
   .nt-min svg { width: 26px; height: 26px; fill: currentColor; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6)); }
   .nt-min:active { transform: scale(.88); background: rgba(0, 0, 0, .55); }
-  /* السحب لتحت من الصفحة: من غير ما المتصفح يعمل "تحديث" لما تشد لتحت */
-  html:has(.watch), body:has(.watch) { overscroll-behavior-y: none; }
 }
 
 @media (max-width: 760px) { .dock.mini.float { width: min(54vw, 250px); } }
@@ -1715,3 +1713,18 @@ body {
 }
 .owner-row .actions > .btn:active, .owner-row .actions > .more-wrap > .btn:active { background: rgba(242, 237, 226, .12); }
 .owner-row .actions > .btn.act-next { min-height: 42px; padding: 0 12px; background: rgba(210, 159, 34, .1); border-color: rgba(210, 159, 34, .25); color: var(--gold-soft); }
+
+/* فتح فيديو من الاقتراحات: صورة الفيديو الجديد بتظهر بهدوء فوق المشغّل وتختفي أول ما يبدأ */
+.swap-cover { position: absolute; inset: 0; z-index: 6; pointer-events: none; background-color: #000; background-size: cover;
+  background-position: center; animation: swapIn .18s ease backwards; transition: opacity .3s ease; }
+.swap-cover.out { opacity: 0; }
+@keyframes swapIn { from { opacity: 0; } }
+
+/* محتوى صفحة الفيديو: دخول هادي وسريع (بدل الطلعة الطويلة) */
+.watch h1, .owner-row, .desc, .series { animation: watchIn .38s cubic-bezier(.2, .8, .2, 1) both; }
+.watch h1 { animation-delay: .03s; }
+.owner-row { animation-delay: .07s; }
+.desc { animation-delay: .11s; }
+.series { animation-delay: .15s; }
+@keyframes watchIn { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { .watch h1, .owner-row, .desc, .series, .swap-cover { animation: none; transition: none; } }
