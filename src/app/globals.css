@@ -1742,3 +1742,7 @@ body {
 .fh-edit { margin-top: 4px; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; color: var(--gold-soft);
   text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(230, 196, 106, .4); cursor: pointer; }
 .fh-edit:active { opacity: .7; }
+
+/* آيفون: ما يعملش زوم لوحده (لا من لمستين ورا بعض، ولا لما تدوس على خانة كتابة خطها أصغر من 16)، والزوم بصباعين شغال عادي */
+html { touch-action: manipulation; }
+@media (hover: none) { input, textarea, select { font-size: 16px !important; } }
