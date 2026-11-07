@@ -8,7 +8,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ChapterItem, VideoItem } from "@/lib/types";
 import { ClientStore } from "@/lib/client/store";
 import { startSync } from "@/lib/client/sync";
@@ -90,6 +90,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [duration, setDuration] = useState(0);
   const [bufferedFraction, setBufferedFraction] = useState(0);
   const [slotElement, setSlotElement] = useState<HTMLElement | null>(null);
+  // Landed on a page that isn't a video page: the player goes to the floating window (if its spot is gone)
+  const pagePath = usePathname();
+  useEffect(() => {
+    if (pagePath.startsWith("/watch")) return;
+    setSlotElement((cur) => (cur && cur.isConnected ? cur : null));
+  }, [pagePath]);
   const [chapters, setChapters] = useState<ChapterItem[]>([]);
   const [clipRange, setClipRange] = useState<[number, number] | null>(null);
   const [sleepMode, setSleepMode] = useState<SleepOption>(null);
@@ -173,7 +179,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const attachSlot = useCallback((el: HTMLElement | null) => {
-    setSlotElement(el);
+    if (el) {
+      setSlotElement(el);
+      return;
+    }
+    // Leaving a watch page. Going to another video (a suggestion): the player stays where it is and the next
+    // page takes it over, with no trip to the floating window and back. Going anywhere else: floating window.
+    window.setTimeout(() => {
+      if (window.location.pathname.startsWith("/watch")) return;
+      setSlotElement((cur) => (cur && cur.isConnected ? cur : null));
+    }, 0);
   }, []);
 
   const closePlayer = useCallback(() => {
