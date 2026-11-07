@@ -409,3 +409,55 @@ describe("Calm feed (رزانة)", () => {
     }
   });
 });
+
+describe("New first, and what you picked", () => {
+  it("rhythm: religious only in the 4th and 8th place, the rest leans on the picks", async () => {
+    const { getRhythmSlots } = await import("../src/lib/client/algo.ts");
+    for (const h of [8, 15, 23]) {
+      const r = getRhythmSlots(h, []);
+      assert.deepEqual(r.map((k, i) => (k === "وعظ" ? i : -1)).filter((i) => i >= 0), [3, 7]);
+    }
+    const work = getRhythmSlots(23, ["برمجة", "إنجليزي", "ذكاء اصطناعي"]);
+    const fun = getRhythmSlots(8, ["نجارة", "زراعة وتربية", "قصص"]);
+    assert.equal(work[0], "عمل");
+    assert.ok(work.filter((k) => k === "عمل").length >= 4);
+    assert.equal(fun[0], "ترفيه");
+    assert.ok(fun.filter((k) => k === "ترفيه").length >= 4);
+  });
+
+  it("fresh boost: today > this week > two weeks ago > older or undated", async () => {
+    const { freshBoost } = await import("../src/lib/client/algo.ts");
+    const now = new Date(2026, 10, 7, 12).getTime();
+    const v = (dt?: number): VideoItem => ({ id: "x", t: "t", c: "c", d: 900, tp: "برمجة", g: "كورسات", r: 0.5, dt });
+    const today = freshBoost(v(20261107), 0, now);
+    const week = freshBoost(v(20261102), 0, now);
+    const old = freshBoost(v(20261020), 0, now);
+    assert.ok(today > week && week > 0 && old === 0, `${today} ${week} ${old}`);
+    assert.equal(freshBoost(v(undefined), 0, now), 0);
+    assert.ok(freshBoost(v(20261107), -1, now) < today);
+  });
+
+  it("home pool carries plenty of each picked topic and every recent upload", () => {
+    const plain = getFeedVideos({ limit: 2500 }).videos;
+    const picked = getFeedVideos({ limit: 2500, interests: ["نجارة"] }).videos;
+    const n = (l: VideoItem[]) => l.filter((v) => v.tp === "نجارة").length;
+    assert.ok(n(picked) >= Math.min(60, n(plain) + 30), `${n(plain)} -> ${n(picked)}`);
+    const relig = plain.filter((v) => ["علماء", "أنا السلفي", "القرآن الكريم"].includes(v.g)).length;
+    assert.ok(relig / plain.length < 0.4, `religious share ${relig}/${plain.length}`);
+    const newest = Math.max(...plain.map((v) => v.dt || 0));
+    assert.ok(plain.slice(0, 5).every((v) => (v.dt || 0) >= newest - 100), "newest uploads lead the pool");
+  });
+});
+
+describe("Hourly new-video sync rules", () => {
+  it("reads YouTube durations and keeps the site's title rules", async () => {
+    const { isoSeconds, titleAllowed } = await import("../scripts/sync-new.ts");
+    assert.equal(isoSeconds("PT1H2M3S"), 3723);
+    assert.equal(isoSeconds("PT59S"), 59);
+    assert.equal(isoSeconds("P0D"), 0);
+    assert.ok(titleAllowed("شرح بايثون للمبتدئين", "كورسات"));
+    assert.ok(!titleAllowed("أفضل فيلم رعب", "كورسات"));
+    assert.ok(titleAllowed("حكم مشاهدة الأفلام", "علماء"));
+    assert.ok(!titleAllowed("اغنية جديدة", "علماء"));
+  });
+});

@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "buildCommand": "gunzip -c data/mohsen.db.gz > data/mohsen.db && next build",
+  "buildCommand": "gunzip -c data/mohsen.db.gz > data/mohsen.db && node --experimental-strip-types scripts/import-channels.ts data/fresh.jsonl && next build",
   "regions": ["fra1"]
 }

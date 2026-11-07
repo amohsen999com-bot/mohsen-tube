@@ -7,7 +7,7 @@ import fs from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { estimateVideoLevel, normArabic, stemWord, tokenizeWords } from "../src/lib/arabic.ts";
 
-type Row = { id: string; title: string; duration: number; views?: number; channel: string; channel_id: string; group: string; field: string };
+type Row = { id: string; title: string; duration: number; views?: number; channel: string; channel_id: string; group: string; field: string; dt?: number };
 
 function tokens(title: string, channel: string, topic: string): string {
   const out = new Set<string>();
@@ -19,6 +19,10 @@ function tokens(title: string, channel: string, topic: string): string {
   return [...out].join(" ");
 }
 
+if (!fs.existsSync(process.argv[2])) {
+  console.log(`no ${process.argv[2]}, nothing to add`);
+  process.exit(0);
+}
 const rows: Row[] = fs.readFileSync(process.argv[2], "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
 const db = new DatabaseSync("data/mohsen.db");
 const blocked = new Set(Object.values(JSON.parse(fs.readFileSync("data/blocked_channels.json", "utf8")) as Record<string, string>));
@@ -27,7 +31,7 @@ const upChannel = db.prepare(`INSERT OR IGNORE INTO channels (name, id, grp, fie
 const exists = db.prepare(`SELECT is_curated FROM videos WHERE id = ?`);
 const markCurated = db.prepare(`UPDATE videos SET is_curated = 1 WHERE id = ?`);
 const insVideo = db.prepare(`INSERT INTO videos (id, t, c, d, tp, g, r, s, q, o, lv, hd, dt, y, pl, is_curated, norm_t, norm_c)
-  VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, 0, NULL, NULL, NULL, 1, ?, ?)`);
+  VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, 0, ?, NULL, NULL, 1, ?, ?)`);
 const insFts = db.prepare(`INSERT INTO videos_fts (id, tokens, norm_title, norm_channel) VALUES (?, ?, ?, ?)`);
 
 let added = 0, promoted = 0;
@@ -47,7 +51,7 @@ for (const v of rows) {
   const r = Math.round(Math.min(1, Math.log10((v.views || 0) + 1) / 7) * 1000) / 1000;
   const normT = normArabic(v.title), normC = normArabic(v.channel);
   insVideo.run(v.id, v.title, v.channel, Math.round(v.duration || 0), v.field, v.group, r,
-    estimateVideoLevel(v.title, v.field, v.group, v.duration || 0, undefined), normT, normC);
+    estimateVideoLevel(v.title, v.field, v.group, v.duration || 0, undefined), v.dt || null, normT, normC);
   insFts.run(v.id, tokens(v.title, v.channel, v.field), normT, normC);
   added++;
 }

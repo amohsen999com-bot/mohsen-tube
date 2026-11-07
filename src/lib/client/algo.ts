@@ -44,15 +44,35 @@ export function getVideoCategory(v: VideoItem): CategoryKind {
   return "ترفيه";
 }
 
+/** Topics by kind, to read what someone picked at the start. */
+const FUN_TOPICS = new Set(
+  "نجارة|اختراعات|كهرباء وإلكترونيات|زراعة وتربية|زراعة|قصص|طبخ|ترميم|ميكانيكا سيارات|بدائي وبقاء|بناء وتشطيب|صيانة وسباكة|ورشة ومعادن".split("|")
+);
+const DEEN_TOPICS = new Set(
+  "تفسير|سيرة وتاريخ|فقه|فتاوى|حديث|عقيدة|رقائق|ردود وشبهات|القرآن الكريم|أصول وعلوم|دروس عامة".split("|")
+);
+export const topicKind = (tp: string): CategoryKind =>
+  DEEN_TOPICS.has(tp) ? "وعظ" : FUN_TOPICS.has(tp) ? "ترفيه" : "عمل";
+
 /**
- * The feed's rhythm: 8 slots that repeat. Religious content gets 2 of every 8 at any hour. The goal is
- * to make people love the deen gently over years, not to fill their screen with it.
+ * The feed's rhythm: 8 slots that repeat. Religious content gets 2 of every 8 at any hour, in the 4th and
+ * 8th place (never the first cards). The goal is to make people love the deen gently over years, not to
+ * fill their screen with it. The other 6 lean on what the viewer picked (skills vs. hands-on/fun), then
+ * on the time of day (more learning in the morning, lighter at night).
  */
-const RHYTHM: Record<"morning" | "afternoon" | "night", CategoryKind[]> = {
-  morning: ["عمل", "ترفيه", "وعظ", "عمل", "ترفيه", "عمل", "ترفيه", "وعظ"],
-  afternoon: ["ترفيه", "عمل", "وعظ", "ترفيه", "عمل", "ترفيه", "عمل", "وعظ"],
-  night: ["ترفيه", "وعظ", "ترفيه", "عمل", "ترفيه", "وعظ", "ترفيه", "عمل"],
-};
+export function getRhythmSlots(hour = new Date().getHours(), picks: string[] = readLocal<string[]>("nt_interests", [])): CategoryKind[] {
+  let work = hour >= 5 && hour < 13 ? 0.6 : hour >= 13 && hour < 20 ? 0.5 : 0.35;
+  const kinds = picks.map(topicKind).filter((k) => k !== "وعظ");
+  if (kinds.length) work = 0.75 * (kinds.filter((k) => k === "عمل").length / kinds.length) + 0.25 * work;
+  const nWork = Math.max(1, Math.min(5, Math.round(6 * work)));
+  const major: CategoryKind = nWork >= 3 ? "عمل" : "ترفيه";
+  const minor: CategoryKind = major === "عمل" ? "ترفيه" : "عمل";
+  const nMinor = major === "عمل" ? 6 - nWork : nWork;
+  const six = Array.from({ length: 6 }, (_, i) =>
+    Math.floor(((i + 1) * nMinor) / 6) > Math.floor((i * nMinor) / 6) ? minor : major
+  );
+  return [six[0], six[1], six[2], "وعظ", six[3], six[4], six[5], "وعظ"];
+}
 
 /**
  * "رزانة": how far apart similar things must be in the feed, whatever the scores say. A subscription,
@@ -76,11 +96,6 @@ export const CALM = {
 /** What a running feed already showed, keyed by its recentChannels list (which lives as long as the feed). */
 const trails = new WeakMap<string[], VideoItem[]>();
 
-export function getRhythmSlots(hour = new Date().getHours()): CategoryKind[] {
-  if (hour >= 5 && hour < 13) return RHYTHM.morning;
-  if (hour >= 13 && hour < 20) return RHYTHM.afternoon;
-  return RHYTHM.night;
-}
 
 interface ModelData {
   f: Record<string, [number, number]>;
@@ -297,6 +312,26 @@ export function newFromLoved(v: VideoItem, subs: Set<string>, now = Date.now()):
   return ageDays < 0 || ageDays > 21 ? 0 : 0.9 * love * (1 - ageDays / 21);
 }
 
+/** Days since a video came out (from its YYYYMMDD date), or null when unknown. */
+export function ageDays(v: VideoItem, now = Date.now()): number | null {
+  if (!v.dt) return null;
+  const y = Math.floor(v.dt / 10000);
+  const m = Math.floor(v.dt / 100) % 100;
+  const d = v.dt % 100;
+  return Math.max(0, (now - new Date(y, m - 1, d).getTime()) / 86400_000);
+}
+
+/**
+ * New uploads come first: anything out in the last day gets a big lift, fading to nothing after two
+ * weeks. The calm rules still spread them out, and a kind the viewer clearly dislikes keeps less of it.
+ */
+export function freshBoost(v: VideoItem, aff: number, now = Date.now()): number {
+  const a = ageDays(v, now);
+  if (a === null || a > 14) return 0;
+  const lift = a < 1.5 ? 2.4 : a < 3.5 ? 1.8 : a < 7.5 ? 1.0 : 0.4 * (1 - (a - 7.5) / 6.5);
+  return aff < -0.3 ? lift * 0.3 : lift;
+}
+
 /** Why each video in the last built feed is there (shown on the card). */
 const whyById = new Map<string, string>();
 
@@ -363,7 +398,20 @@ export const AlgoEngine = {
     return featureValue("t:" + tp);
   },
 
+  /** What the viewer picked at the start, then the topics they've clearly come to love (at most 8). */
+  interests(): string[] {
+    const picked = readLocal<string[]>("nt_interests", []);
+    const loved = Object.keys(getModel().f)
+      .filter((k) => k.startsWith("t:") && k !== "t:دروس عامة")
+      .map((k) => [k.slice(2), featureValue(k)] as const)
+      .filter(([, val]) => val > 0.8)
+      .sort((a, b) => b[1] - a[1])
+      .map(([tp]) => tp);
+    return [...new Set([...picked, ...loved])].slice(0, 8);
+  },
+
   seedInterests(topics: string[], whoLabels: string[] = []): void {
+    writeLocal("nt_interests", topics.slice(0, 12));
     for (const tp of topics) {
       bumpFeature("t:" + tp, 2.2);
       for (const w of normArabic(tp).split(/\s+/).filter(Boolean)) {
@@ -447,6 +495,7 @@ export const AlgoEngine = {
     );
     const learned = Object.keys(getModel().f).length > 0;
     const now = Date.now();
+    const picked = new Set(readLocal<string[]>("nt_interests", []));
 
     const scored = candidates.map((v) => {
       const damp = CHANNEL_DAMP[v.c] || 0;
@@ -458,12 +507,14 @@ export const AlgoEngine = {
       const skipPenalty = (getSkips(v.id)[0] || 0) * 0.35;
       const relScore = rel.get(v.id) || 0;
       const fresh = newFromLoved(v, subs, now);
+      const isNew = freshBoost(v, aff, now);
+      const pickedBoost = picked.has(v.tp) ? 0.8 : 0;
       const [gb, gwhy, step] = Growth.bonus(v, aff, ctx);
       const score =
         1.35 * aff + 0.45 * tFit + 0.75 * quality + subBoost - skipPenalty +
-        1.1 * Math.tanh(relScore) + fresh + gb - damp;
+        1.1 * Math.tanh(relScore) + fresh + isNew + pickedBoost + gb - damp;
       const why =
-        fresh > 0.3 ? "جديد من " + v.c
+        fresh > 0.3 || isNew >= 1.8 ? "جديد من " + v.c
         : mood > 0.6 ? "على مزاجك دلوقتي"
         : gwhy && (gb > 0.6 || ctx.season) ? gwhy
         : step && getVideoCategory(v) !== "ترفيه" ? step

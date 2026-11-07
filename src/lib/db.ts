@@ -141,17 +141,97 @@ export function getCatalogSummary() {
   };
 }
 
-/** Max videos one channel can contribute to the home candidate pool */
-const FEED_CHANNEL_CAP = 40;
+/** Max videos one channel can contribute to each kind's share of the home pool */
+const FEED_CHANNEL_CAP = 25;
+const INTEREST_PER_TOPIC = 90;
+/** How many of each kind the home pool carries (religious is the smallest share: the feed shows 2 in 8). */
+const POOL_SHARE: Array<[string, number]> = [
+  [`g IN ('علماء', 'أنا السلفي', 'القرآن الكريم')`, 260],
+  [`(g IN ('كورسات', 'طلبك') OR (g = 'بودكاست' AND tp = 'بيزنس'))`, 480],
+  [`g NOT IN ('علماء', 'أنا السلفي', 'القرآن الكريم', 'كورسات', 'طلبك') AND NOT (g = 'بودكاست' AND tp = 'بيزنس')`, 420],
+];
+const SCORE_SQL = `(0.55 * COALESCE(s, r) + 0.25 * COALESCE(q, 0.5) + 0.2 * hd)`;
+let balancedCache: VideoItem[] | null = null;
+const topicCache = new Map<string, VideoItem[]>();
+let freshCache: { at: number; list: VideoItem[] } | null = null;
+
+function getBalancedPool(): VideoItem[] {
+  if (balancedCache) return balancedCache;
+  const db = getDb();
+  const list: VideoItem[] = [];
+  for (const [where, n] of POOL_SHARE) {
+    const rows = db
+      .prepare(
+        `SELECT ${VIDEO_COLS} FROM (
+           SELECT *, ${SCORE_SQL} AS score,
+                  ROW_NUMBER() OVER (PARTITION BY c ORDER BY ${SCORE_SQL} DESC) AS ch_rank
+           FROM videos WHERE is_curated = 1 AND ${where}
+         )
+         WHERE ch_rank <= ?
+         ORDER BY score DESC
+         LIMIT ?`
+      )
+      .all(FEED_CHANNEL_CAP, n) as unknown as RawVideoRow[];
+    list.push(...rows.map(mapRowToVideo));
+  }
+  balancedCache = list;
+  return list;
+}
+
+/** The best of one topic the viewer picked, spread over its channels (no channel more than a third). */
+function getTopicTop(tp: string, n: number): VideoItem[] {
+  const key = String(tp || "").slice(0, 40);
+  if (!key) return [];
+  const hit = topicCache.get(key);
+  if (hit) return hit;
+  const rows = getDb()
+    .prepare(
+      `SELECT ${VIDEO_COLS} FROM (
+         SELECT *, ${SCORE_SQL} AS score,
+                ROW_NUMBER() OVER (PARTITION BY c ORDER BY ${SCORE_SQL} DESC) AS ch_rank
+         FROM videos WHERE is_curated = 1 AND tp = ?
+       )
+       WHERE ch_rank <= ?
+       ORDER BY score DESC
+       LIMIT ?`
+    )
+    .all(key, Math.max(6, Math.ceil(n / 3)), n) as unknown as RawVideoRow[];
+  const list = rows.map(mapRowToVideo);
+  if (topicCache.size > 200) topicCache.clear();
+  topicCache.set(key, list);
+  return list;
+}
+
+const dayNum = (ms: number) => {
+  const d = new Date(ms);
+  return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+};
+
+/** Everything published in the last 14 days, newest first, so new uploads always reach the feed. */
+export function getFreshVideos(now = Date.now()): VideoItem[] {
+  if (freshCache && now - freshCache.at < 3600_000) return freshCache.list;
+  const rows = getDb()
+    .prepare(
+      `SELECT ${VIDEO_COLS} FROM videos
+       WHERE is_curated = 1 AND dt >= ?
+       ORDER BY dt DESC, ${SCORE_SQL} DESC
+       LIMIT 400`
+    )
+    .all(dayNum(now - 14 * 86400_000)) as unknown as RawVideoRow[];
+  freshCache = { at: now, list: rows.map(mapRowToVideo) };
+  return freshCache.list;
+}
 
 export function getFeedVideos(options: {
   topic?: string;
   category?: "all" | "fun";
   limit?: number;
   offset?: number;
+  /** Topics the viewer picked or clearly loves: the pool carries plenty of each. */
+  interests?: string[];
 }): { videos: VideoItem[]; total: number } {
   const db = getDb();
-  const limit = Math.min(Math.max(options.limit || 240, 1), 1500);
+  const limit = Math.min(Math.max(options.limit || 240, 1), 2500);
   const offset = Math.max(options.offset || 0, 0);
 
   if (options.category === "fun") {
@@ -174,30 +254,31 @@ export function getFeedVideos(options: {
          LIMIT ? OFFSET ?`
       )
       .all(options.topic, limit, offset) as unknown as RawVideoRow[];
-    return { videos: rows.map(mapRowToVideo), total: totalRow.cnt };
+    const list = rows.map(mapRowToVideo);
+    // A topic chip still starts with what's new in that topic
+    if (!offset) {
+      const fresh = getFreshVideos().filter((v) => v.tp === options.topic);
+      const ids = new Set(fresh.map((v) => v.id));
+      return { videos: [...fresh, ...list.filter((v) => !ids.has(v.id))].slice(0, limit), total: totalRow.cnt };
+    }
+    return { videos: list, total: totalRow.cnt };
   }
 
-  // Balanced pool across وعظ, عمل, ترفيه so client Two-Tower & rhythm engine has rich candidates.
-  // No channel may take more than FEED_CHANNEL_CAP of the pool (one prolific channel used to fill a third of it).
   const totalRow = db
     .prepare(`SELECT COUNT(*) as cnt FROM videos WHERE is_curated = 1`)
     .get() as { cnt: number };
 
-  const rows = db
-    .prepare(
-      `SELECT ${VIDEO_COLS} FROM (
-         SELECT *, (0.55 * COALESCE(s, r) + 0.25 * COALESCE(q, 0.5) + 0.2 * hd) AS score,
-                ROW_NUMBER() OVER (PARTITION BY c ORDER BY (0.55 * COALESCE(s, r) + 0.25 * COALESCE(q, 0.5) + 0.2 * hd) DESC) AS ch_rank
-         FROM videos
-         WHERE is_curated = 1
-       )
-       WHERE ch_rank <= ?
-       ORDER BY score DESC
-       LIMIT ? OFFSET ?`
-    )
-    .all(FEED_CHANNEL_CAP, limit, offset) as unknown as RawVideoRow[];
-
-  return { videos: rows.map(mapRowToVideo), total: totalRow.cnt };
+  // Home pool = what just came out + plenty of what this viewer picked + a fixed share of each kind.
+  // (It used to be the top 1200 by score: 62% sheikhs, and only 18 programming videos for someone who picked it.)
+  const out: VideoItem[] = [];
+  const seen = new Set<string>();
+  const add = (rows: VideoItem[]) => {
+    for (const v of rows) if (!seen.has(v.id)) (seen.add(v.id), out.push(v));
+  };
+  add(getFreshVideos());
+  for (const tp of (options.interests || []).slice(0, 10)) add(getTopicTop(tp, INTEREST_PER_TOPIC));
+  add(getBalancedPool());
+  return { videos: out.slice(offset, offset + limit), total: totalRow.cnt };
 }
 
 /**

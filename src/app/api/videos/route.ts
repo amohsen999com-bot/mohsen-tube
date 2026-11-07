@@ -51,10 +51,11 @@ export async function GET(request: NextRequest) {
 
     const category = sp.get("category") === "fun" ? "fun" : "all";
     const topic = sp.get("topic") || undefined;
-    const limit = Math.min(Math.max(Number(sp.get("limit")) || 300, 1), 1500);
+    const limit = Math.min(Math.max(Number(sp.get("limit")) || 300, 1), 2500);
+    const interests = (sp.get("interests") || "").split("|").map((s) => s.trim()).filter(Boolean).slice(0, 10);
     const offset = Math.max(Number(sp.get("offset")) || 0, 0);
 
-    const data = getFeedVideos({ category, topic, limit, offset });
+    const data = getFeedVideos({ category, topic, limit, offset, interests });
     return NextResponse.json(data);
   } catch (err) {
     console.error("GET /api/videos error:", err);
