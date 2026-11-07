@@ -150,8 +150,9 @@ export function MiniFloat({
     const el = dockRef.current;
     if (!el) return;
     if (!d.moved) {
-      // Tap: first one shows the buttons, a tap while they're showing opens the video
-      if (ui) onExpand();
+      // Tap: first one shows the buttons, a tap while they're showing opens the video.
+      // Mouse: the buttons already show on hover, so a click opens the video.
+      if (ui || e.pointerType === "mouse") onExpand();
       else showUi();
       return;
     }
@@ -171,11 +172,14 @@ export function MiniFloat({
 
     // Thrown (or pushed) out of the screen: it flies away and closes
     // (pushed half out of the screen, or a throw that's mostly sideways/down and fast enough to leave it)
-    const sideways = Math.abs(vx) > 0.9 && Math.abs(vx) > Math.abs(vy) * 1.4;
-    const downward = vy > 0.9 && vy > Math.abs(vx) * 1.4;
-    const outLeft = cur.x < -w * 0.45 || (sideways && vx < 0 && px < -w * 0.3);
-    const outRight = cur.x > b.vw - w * 0.55 || (sideways && vx > 0 && px > b.vw - w * 0.7);
-    const outDown = cur.y > b.vh - h * 0.5 || (downward && py > b.vh - h * 0.4);
+    // (a mouse doesn't "throw": on a computer it closes only when dragged half out, or with ✕)
+    const touch = e.pointerType !== "mouse";
+    const sideways = touch && Math.abs(vx) > 0.9 && Math.abs(vx) > Math.abs(vy) * 1.4;
+    const downward = touch && vy > 0.9 && vy > Math.abs(vx) * 1.4;
+    // A throw only closes it when it's already near that edge (a long fast drag across the screen just moves it)
+    const outLeft = cur.x < -w * 0.45 || (sideways && vx < 0 && px < -w * 0.3 && cur.x < w * 0.25);
+    const outRight = cur.x > b.vw - w * 0.55 || (sideways && vx > 0 && px > b.vw - w * 0.7 && cur.x > b.vw - w * 1.25);
+    const outDown = cur.y > b.vh - h * 0.5 || (downward && py > b.vh - h * 0.4 && cur.y > b.vh - h * 1.6);
     if (outLeft || outRight || outDown) {
       const speed = Math.max(0.8, Math.hypot(vx, vy));
       const tx = outDown && !outLeft && !outRight ? cur.x + vx * 120 : vx < 0 || outLeft ? -w - 30 : b.vw + 30;

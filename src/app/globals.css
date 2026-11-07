@@ -1560,7 +1560,7 @@ body {
    - صف واحد: أيقونة فوق وكلمة تحت، كلهم نفس المقاس، والأهم الأول (استفدت منه، حفظ، مشاركة).
    - مفيش زحمة ولا سطرين، فالعين بتقرا الصف مرة واحدة.
    - السؤال: كارت هادي، كلمة "ثانية واحدة" بتقلل المجهود المتوقع، والإجابات مربعات متساوية سهلة للصباع. */
-@media (max-width: 600px) {
+@media all { /* على الموبايل والكمبيوتر */
   .owner-row .actions { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; width: 100%;
     padding: 6px 2px; margin-top: 2px; border-radius: 16px; background: rgba(242, 237, 226, .04); border: 1px solid rgba(242, 237, 226, .06); }
   .owner-row .actions > .btn, .owner-row .actions > .more-wrap > .btn {
@@ -1598,7 +1598,13 @@ body {
 }
 .ask-eyebrow { display: none; }
 .more-lbl { display: none; }
-@media (max-width: 600px) { .more-lbl { display: inline; } .ask-eyebrow { display: block; } }
+.more-lbl { display: inline; } .ask-eyebrow { display: block; }
+/* الكمبيوتر: نفس الصف بس بعرض مناسب، والكارت مش واخد الصفحة كلها */
+@media (min-width: 601px) {
+  .owner-row .actions { max-width: 560px; }
+  .ask { max-width: 640px; }
+  .owner-row .actions > .btn:hover, .owner-row .actions > .more-wrap > .btn:hover { background: rgba(242, 237, 226, .07); color: var(--text); }
+}
 /* على الموبايل مفيش hover: اللمسة ما تسيبش الزرار متلوّن */
 @media (max-width: 600px) and (hover: none) {
   .owner-row .actions > .btn:hover, .owner-row .actions > .more-wrap > .btn:hover { background: transparent; }
@@ -1642,7 +1648,7 @@ body {
 
 /* ---------- الشباك العايم على الموبايل (زي يوتيوب) ----------
    مكانه بيتحدد بـ transform بس (من MiniFloat)، فالحركة ناعمة ومتزامنة مع الشاشة. */
-.dock.mini.float { left: 0; top: 0; right: auto; bottom: auto; width: min(54vw, 250px); border-radius: 12px; animation: none;
+.dock.mini.float { left: 0; top: 0; right: auto; bottom: auto; width: 380px; border-radius: 12px; animation: none;
   box-shadow: 0 14px 40px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255, 255, 255, .08); touch-action: none; backface-visibility: hidden; }
 .dock.mini.float .dock-bar, .dock.mini.float .nt-fs { display: none !important; }
 .dock.mini.float .yt-crop-mask, .dock.mini.float .yt-crop-mask iframe { pointer-events: none !important; }
@@ -1661,7 +1667,10 @@ body {
 .mini-play:active { transform: scale(.9); }
 
 /* سهم "صغّر" فوق الفيديو على الشمال، زي يوتيوب */
-.nt-min { display: none; }
+.nt-min { display: grid; position: absolute; top: 8px; left: 8px; z-index: 7; width: 40px; height: 40px; padding: 0; border: 0;
+  border-radius: 50%; place-items: center; color: #fff; background: rgba(0, 0, 0, .35); cursor: pointer; transition: transform .15s ease, background .15s ease; }
+.nt-min svg { width: 26px; height: 26px; fill: currentColor; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6)); }
+.nt-min:hover { background: rgba(0, 0, 0, .6); }
 @media (max-width: 760px) {
   .nt-min { display: grid; position: absolute; top: 6px; left: 6px; z-index: 7; width: 38px; height: 38px; padding: 0; border: 0;
     border-radius: 50%; place-items: center; color: #fff; background: rgba(0, 0, 0, .35); -webkit-tap-highlight-color: transparent;
@@ -1670,4 +1679,11 @@ body {
   .nt-min:active { transform: scale(.88); background: rgba(0, 0, 0, .55); }
   /* السحب لتحت من الصفحة: من غير ما المتصفح يعمل "تحديث" لما تشد لتحت */
   html:has(.watch), body:has(.watch) { overscroll-behavior-y: none; }
+}
+
+@media (max-width: 760px) { .dock.mini.float { width: min(54vw, 250px); } }
+/* الكمبيوتر: الأزرار بتظهر لما الماوس يقف على الشباك */
+@media (hover: hover) and (pointer: fine) {
+  .dock.mini.float:hover .mini-ui { opacity: 1; }
+  .dock.mini.float:hover .mini-ui button { pointer-events: auto; }
 }

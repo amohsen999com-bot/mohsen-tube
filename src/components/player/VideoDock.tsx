@@ -711,7 +711,7 @@ export function VideoDock() {
     mq.addEventListener("change", on);
     return () => mq.removeEventListener("change", on);
   }, []);
-  const floating = isMini && isPhone;
+  const floating = isMini; // the floating window is the same on phones and computers
 
   // Pages opened inside the site in this visit: going "back" stays in the site only when there is one
   const pathname = usePathname();
@@ -897,7 +897,7 @@ export function VideoDock() {
         </div>
 
         {/* Phones: shrink to the floating window (YouTube's chevron, top left of the video) */}
-        {isPhone && !isMini && !isFullscreen && (
+        {!isMini && !isFullscreen && (
           <button
             type="button"
             className="nt-min"
