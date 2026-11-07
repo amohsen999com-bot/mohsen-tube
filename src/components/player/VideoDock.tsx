@@ -165,10 +165,13 @@ export function VideoDock() {
       return;
     }
     const r = slotElement.getBoundingClientRect();
+    // (never wider than the page itself, so the player can't push the page sideways)
+    const pageW = document.documentElement.clientWidth;
+    const left = Math.max(0, r.left + window.scrollX);
     setBoxPosition({
       top: r.top + window.scrollY,
-      left: r.left + window.scrollX,
-      width: r.width,
+      left,
+      width: Math.min(r.width, pageW - left),
       height: r.height,
     });
   }, [slotElement, isFullscreen]);
@@ -181,7 +184,16 @@ export function VideoDock() {
     ro.observe(document.body);
     window.addEventListener("resize", syncPosition);
     window.addEventListener("scroll", syncPosition, { passive: true });
+    // iPhone: the slot can be measured mid-entrance (or while the page sits pushed sideways), and nothing
+    // fires again afterwards, leaving the player wider than its spot. Put the page back and measure again once settled.
+    const settle = () => {
+      const se = document.scrollingElement;
+      if (se && se.scrollLeft !== 0) se.scrollLeft = 0;
+      syncPosition();
+    };
+    const timers = [120, 450, 900, 1600].map((ms) => window.setTimeout(settle, ms));
     return () => {
+      timers.forEach((t) => window.clearTimeout(t));
       ro.disconnect();
       window.removeEventListener("resize", syncPosition);
       window.removeEventListener("scroll", syncPosition);
