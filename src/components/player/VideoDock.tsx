@@ -871,8 +871,25 @@ export function VideoDock() {
   }, [swapCover]);
 
   const lastSlotRef = useRef<{ left: number; top: number; width: number; height: number } | null>(null);
+  /** The page behind the growing video: hidden under a calm backdrop until the video page is ready */
+  const [veil, setVeil] = useState<"" | "in" | "out">("");
   useEffect(() => {
-    if (!isMini && boxPosition && !isFullscreen) lastSlotRef.current = { ...boxPosition };
+    if (veil === "in") {
+      const t = window.setTimeout(() => setVeil("out"), 4000); // never stays if something goes wrong
+      return () => window.clearTimeout(t);
+    }
+    if (veil === "out") {
+      const t = window.setTimeout(() => setVeil(""), 360);
+      return () => window.clearTimeout(t);
+    }
+  }, [veil]);
+  useEffect(() => {
+    if (!isMini && boxPosition && !isFullscreen) {
+      lastSlotRef.current = { ...boxPosition };
+      try {
+        localStorage.setItem("nt_slot_" + window.innerWidth, JSON.stringify(boxPosition));
+      } catch {}
+    }
   }, [isMini, boxPosition, isFullscreen]);
 
   const expandFromMini = useCallback(() => {
@@ -882,12 +899,19 @@ export function VideoDock() {
       const from = el.getBoundingClientRect();
       expandHandoff.from = from;
       expandHandoff.to = null;
-      const t = lastSlotRef.current;
+      let t = lastSlotRef.current;
+      if (!t) {
+        try {
+          t = JSON.parse(localStorage.getItem("nt_slot_" + window.innerWidth) || "null");
+        } catch {}
+        if (t) lastSlotRef.current = t;
+      }
       if (t && from.width > 0 && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         // The page will open at the top, so the slot's page position is where it lands on screen.
         // The player takes its final size right away (shown scaled down so it still looks like the small
         // window) and grows back to scale 1: YouTube never has to redraw at a new size at the end, so no glitch.
         el.classList.add("growing");
+        setVeil("in");
         el.style.width = t.width + "px";
         el.animate(
           [
@@ -914,6 +938,8 @@ export function VideoDock() {
     // Stop the grow (it was positioning the floating version) and the page's own entrance fade
     el.getAnimations().forEach((a) => a.cancel());
     el.classList.remove("growing");
+    // Let the page settle for a frame, then lift the backdrop
+    requestAnimationFrame(() => requestAnimationFrame(() => setVeil((v) => (v ? "out" : v))));
     el.style.animation = "none";
     el.style.transform = ""; // (the floating window's own position, cleared before the glide)
     el.style.transition = "";
@@ -963,7 +989,7 @@ export function VideoDock() {
       <div
         ref={dockRef}
         hidden={!currentVideo}
-        className={`dock ${isMini ? "mini" : ""} ${floating ? "float" : ""} ${
+        className={`dock ${isMini ? "mini" : ""} ${floating ? "float" : ""} ${veil ? "over-veil" : ""} ${
           controlsVisible ? "ctl-on" : ""
         } ${!isPlaying ? "is-paused" : ""} ${isFullscreen ? "is-full" : ""} ${ytControls ? "yt-native" : ""}`}
         style={dockStyle}
@@ -1280,6 +1306,8 @@ export function VideoDock() {
           </div>
         )}
       </div>
+
+      {veil && <div className={"expand-veil " + veil} aria-hidden="true" />}
 
       {/* Watch-Together Floating Pill */}
       {roomCode && (

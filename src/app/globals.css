@@ -1728,3 +1728,12 @@ body {
 .series { animation-delay: .15s; }
 @keyframes watchIn { from { opacity: 0; transform: translateY(8px); } }
 @media (prefers-reduced-motion: reduce) { .watch h1, .owner-row, .desc, .series, .swap-cover { animation: none; transition: none; } }
+
+/* الشباك العايم وهو بيكبر لصفحة الفيديو: خلفية هادية بتغطي تبديل الصفحة، والظل والحواف بيتغيروا تدريجي */
+.expand-veil { position: fixed; inset: 0; z-index: 39; background: var(--bg); pointer-events: none; opacity: 0; animation: veilIn .3s ease forwards; }
+.expand-veil.out { animation: veilOut .34s ease forwards; }
+@keyframes veilIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes veilOut { from { opacity: 1; } to { opacity: 0; } }
+.dock.mini.float.growing { box-shadow: 0 0 0 rgba(0, 0, 0, 0); border-radius: 14px; transition: box-shadow .38s ease, border-radius .38s ease; }
+@media (prefers-reduced-motion: reduce) { .expand-veil { animation: none; opacity: 0; } }
+.dock.over-veil { z-index: 41 !important; }
