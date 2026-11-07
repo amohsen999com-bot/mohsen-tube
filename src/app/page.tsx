@@ -246,7 +246,7 @@ export default function HomePage() {
 
   const remainingResume = resumeVideos
     .filter((v) => v.id !== heroVideo?.id && ClientStore.isAllowed(v))
-    .slice(0, 4);
+    .slice(0, 2); // at most 2 here: the feed below is the point of the page
 
   const gridVideos = displayedFeed.filter((v) => v.id !== heroVideo?.id);
 
