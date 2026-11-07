@@ -1687,3 +1687,14 @@ body {
   .dock.mini.float:hover .mini-ui { opacity: 1; }
   .dock.mini.float:hover .mini-ui button { pointer-events: auto; }
 }
+
+/* الشباك العايم: لمسة بتفتح الفيديو، ✕ صغير دايمًا في الركن، وصورة الفيديو بدل شاشة يوتيوب وهو واقف */
+.mini-ui { display: none !important; }
+.mini-cover { position: absolute; inset: 0; z-index: 7; background-color: #000; background-size: cover; background-position: center;
+  pointer-events: none; animation: miniCoverIn .25s ease both; }
+@keyframes miniCoverIn { from { opacity: 0; } }
+.dock.mini.float .mini-x { position: absolute; top: 6px; left: 6px; z-index: 10; width: 28px; height: 28px; padding: 0; border: 0;
+  border-radius: 50%; display: grid; place-items: center; color: #fff; background: rgba(0, 0, 0, .55); cursor: pointer;
+  -webkit-tap-highlight-color: transparent; transition: transform .15s ease, background .15s ease; }
+.dock.mini.float .mini-x:active { transform: scale(.85); background: rgba(0, 0, 0, .75); }
+.mini-grab { cursor: pointer; }

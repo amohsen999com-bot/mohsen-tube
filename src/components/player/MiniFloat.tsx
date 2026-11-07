@@ -5,10 +5,12 @@
  * - بيتحرك تحت صباعك بالظبط (transform بس، متزامن مع ريفريش الشاشة، فناعم).
  * - لما تسيبه بيكمّل بنفس سرعة رميتك ويقف في أقرب ركن بحركة سوستة خفيفة.
  * - لو رميته برّه الشاشة (يمين/شمال/تحت) بيطير ويتقفل.
- * - لمسة: تظهر الأزرار (اقفل، تشغيل/إيقاف، كبّر). لمسة تانية على الفيديو: يكبر لصفحة الفيديو.
+ * - لمسة عليه: يفتح الفيديو على طول. زرار ✕ صغير في الركن بيقفله.
+ * - وهو واقف: صورة الفيديو بدل شاشة يوتيوب (زرار التشغيل الكبير واللوجو).
+ * - طول ما هو ظاهر، المتصفح ما يعملش "تحديث" لما تشد الصفحة لتحت (عشان الفيديو ما يقفش).
  * - لما ييجي من صفحة الفيديو (سحب لتحت) بيصغر من مكانه لحد الركن (FLIP).
  */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { Glyph } from "@/components/ui/Glyph";
 
 type Corner = "tl" | "tr" | "bl" | "br";
@@ -41,21 +43,18 @@ function cornerPoint(c: Corner, w: number, h: number) {
 
 export function MiniFloat({
   dockRef,
-  isPlaying,
-  onTogglePlay,
+  coverUrl,
   onExpand,
   onClose,
 }: {
   dockRef: React.RefObject<HTMLDivElement | null>;
-  isPlaying: boolean;
-  onTogglePlay: () => void;
+  /** Thumbnail shown over YouTube's paused screen while the video is paused */
+  coverUrl: string | null;
   onExpand: () => void;
   onClose: () => void;
 }) {
   const pos = useRef({ x: 0, y: 0 });
   const corner = useRef<Corner>("bl");
-  const [ui, setUi] = useState(false);
-  const uiTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const frame = useRef(0);
   const drag = useRef<{ id: number; sx: number; sy: number; ox: number; oy: number; t0: number; moved: boolean; samples: Array<[number, number, number]> } | null>(null);
 
@@ -66,12 +65,6 @@ export function MiniFloat({
     el.style.transition = transition || "none";
     el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
   }, [dockRef]);
-
-  const showUi = useCallback(() => {
-    setUi(true);
-    if (uiTimer.current) clearTimeout(uiTimer.current);
-    uiTimer.current = setTimeout(() => setUi(false), 3000);
-  }, []);
 
   // Arrive: from the watch page's video (shrinks into the corner), or just slide into the saved corner
   useEffect(() => {
@@ -84,6 +77,11 @@ export function MiniFloat({
     const from = miniHandoff.from;
     miniHandoff.from = null;
     el.style.willChange = "transform";
+    // No pull-to-refresh while the window floats: a reload would stop the video
+    const root = document.documentElement;
+    const prevOver = root.style.overscrollBehaviorY;
+    root.style.overscrollBehaviorY = "none";
+    document.body.style.overscrollBehaviorY = "none";
     el.style.transformOrigin = "0 0";
     if (from && from.width > 0) {
       apply(p.x, p.y, null);
@@ -112,7 +110,8 @@ export function MiniFloat({
       window.removeEventListener("resize", onResize);
       window.visualViewport?.removeEventListener("resize", onResize);
       cancelAnimationFrame(frame.current);
-      if (uiTimer.current) clearTimeout(uiTimer.current);
+      root.style.overscrollBehaviorY = prevOver;
+      document.body.style.overscrollBehaviorY = "";
       // Hand the element back clean (the watch page positions it again)
       el.style.transform = "";
       el.style.transition = "";
@@ -150,10 +149,7 @@ export function MiniFloat({
     const el = dockRef.current;
     if (!el) return;
     if (!d.moved) {
-      // Tap: first one shows the buttons, a tap while they're showing opens the video.
-      // Mouse: the buttons already show on hover, so a click opens the video.
-      if (ui || e.pointerType === "mouse") onExpand();
-      else showUi();
+      onExpand(); // a tap opens the video
       return;
     }
     cancelAnimationFrame(frame.current);
@@ -211,25 +207,19 @@ export function MiniFloat({
         onPointerUp={onUp}
         onPointerCancel={onUp}
       />
-      <div className={`mini-ui ${ui ? "on" : ""}`}>
-        <button type="button" className="mini-x" aria-label="اقفل" onClick={onClose}>
-          <Glyph name="close" size="20px" />
-        </button>
-        <button type="button" className="mini-open" aria-label="كبّر" onClick={onExpand}>
-          <Glyph name="expand" size="20px" />
-        </button>
-        <button
-          type="button"
-          className="mini-play"
-          aria-label={isPlaying ? "إيقاف" : "تشغيل"}
-          onClick={() => {
-            onTogglePlay();
-            showUi();
-          }}
-        >
-          <Glyph name={isPlaying ? "pause" : "play"} size="30px" />
-        </button>
-      </div>
+      {coverUrl && <div className="mini-cover" style={{ backgroundImage: coverUrl }} aria-hidden="true" />}
+      <button
+        type="button"
+        className="mini-x"
+        aria-label="اقفل"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+      >
+        <Glyph name="close" size="16px" />
+      </button>
     </>
   );
 }

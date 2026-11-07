@@ -18,17 +18,58 @@ function getGreeting(): string {
   return h >= 4 && h < 12 ? "صباح الخير" : h >= 12 && h < 17 ? "نهارك سعيد" : h >= 17 && h < 20 ? "مساء الخير" : "مساء النور";
 }
 
+/**
+ * The feed as you left it. Coming back to the home page (e.g. after shrinking a video into the floating
+ * window) shows the same cards at the same spot right away, with no loading screen, like YouTube.
+ */
+type HomeMemory = {
+  at: number;
+  pool: VideoItem[];
+  feed: VideoItem[];
+  resume: VideoItem[];
+  topic: string;
+  used: Set<string>;
+  recent: string[];
+  y: number;
+};
+let homeMemory: HomeMemory | null = null;
+const HOME_MEMORY_TTL = 30 * 60_000;
+
 export default function HomePage() {
-  const [pool, setPool] = useState<VideoItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedTopic, setSelectedTopic] = useState<string>("");
-  const [displayedFeed, setDisplayedFeed] = useState<VideoItem[]>([]);
-  const [resumeVideos, setResumeVideos] = useState<VideoItem[]>([]);
+  const [mem] = useState<HomeMemory | null>(() =>
+    homeMemory && Date.now() - homeMemory.at < HOME_MEMORY_TTL ? homeMemory : null
+  );
+  const [pool, setPool] = useState<VideoItem[]>(mem?.pool ?? []);
+  const [loading, setLoading] = useState(!mem);
+  const [selectedTopic, setSelectedTopic] = useState<string>(mem?.topic ?? "");
+  const [displayedFeed, setDisplayedFeed] = useState<VideoItem[]>(mem?.feed ?? []);
+  const [resumeVideos, setResumeVideos] = useState<VideoItem[]>(mem?.resume ?? []);
+  const skipRebuildRef = useRef(!!mem);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [, setStoreTick] = useState(0);
 
-  const usedIdsRef = useRef<Set<string>>(new Set());
-  const recentChannelsRef = useRef<string[]>([]);
+  const usedIdsRef = useRef<Set<string>>(mem?.used ?? new Set());
+  const recentChannelsRef = useRef<string[]>(mem?.recent ?? []);
+
+  // Remember the feed and where you were in it, and put you back there when you return
+  const latest = useRef({ pool, feed: displayedFeed, resume: resumeVideos, topic: selectedTopic, y: 0 });
+  latest.current = { ...latest.current, pool, feed: displayedFeed, resume: resumeVideos, topic: selectedTopic };
+  useEffect(() => {
+    if (mem) requestAnimationFrame(() => window.scrollTo(0, mem.y));
+    // (only while this page is the one showing: leaving it scrolls the window to the top first)
+    const onScroll = () => {
+      if (window.location.pathname === "/") latest.current.y = window.scrollY;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      const l = latest.current;
+      if (l.pool.length && l.feed.length) {
+        homeMemory = { at: Date.now(), pool: l.pool, feed: l.feed, resume: l.resume, topic: l.topic, used: usedIdsRef.current, recent: recentChannelsRef.current, y: l.y };
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const chipsBarRef = useRef<HTMLDivElement | null>(null);
   const chipsRowRef = useRef<HTMLDivElement | null>(null);
@@ -47,6 +88,7 @@ export default function HomePage() {
 
   // Load curated candidate pool and summary
   useEffect(() => {
+    if (mem) return; // came back: the remembered feed is already on screen
     let active = true;
     async function loadInitial() {
       setLoading(true);
@@ -101,6 +143,7 @@ export default function HomePage() {
     return () => {
       active = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filteredPool = useMemo(() => {
@@ -122,6 +165,10 @@ export default function HomePage() {
   }, [filteredPool]);
 
   useEffect(() => {
+    if (skipRebuildRef.current) {
+      skipRebuildRef.current = false; // keep the remembered cards instead of shuffling a new feed
+      return;
+    }
     if (filteredPool.length > 0) {
       rebuildFeed();
     } else {

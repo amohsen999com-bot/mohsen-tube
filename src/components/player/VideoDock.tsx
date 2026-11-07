@@ -918,8 +918,11 @@ export function VideoDock() {
         {floating && (
           <MiniFloat
             dockRef={dockRef}
-            isPlaying={isPlaying}
-            onTogglePlay={togglePlay}
+            coverUrl={
+              !isPlaying && currentVideo
+                ? "url(https://i.ytimg.com/vi/" + currentVideo.id + "/" + (currentVideo.hd ? "maxresdefault" : "hqdefault") + ".jpg), url(https://i.ytimg.com/vi/" + currentVideo.id + "/hqdefault.jpg)"
+                : null
+            }
             onExpand={() => currentVideo && router.push("/watch/" + currentVideo.id)}
             onClose={closePlayer}
           />
