@@ -553,3 +553,21 @@ describe("Only what you're into; religious content by interest", () => {
     assert.ok(kinds.size >= 4, `with variety: ${[...kinds].join(", ")}`);
   });
 });
+
+describe("Religious content grows slowly over the years", () => {
+  it("each kind of viewer starts gentle and deepens over two years", async () => {
+    const { profilePattern } = await import("../src/lib/client/algo.ts");
+    const share = (p: string[]) => p.filter((k) => k === "وعظ").length / p.length;
+    const visitor = { topics: new Set<string>(), deen: "none" as const, kinds: { "وعظ": 0, "عمل": 0, "ترفيه": 0 } };
+    const coder = { topics: new Set(["برمجة"]), deen: "none" as const, kinds: { "وعظ": 0, "عمل": 1, "ترفيه": 0 } };
+    const some = { topics: new Set(["برمجة", "سيرة وتاريخ"]), deen: "some" as const, kinds: { "وعظ": 1, "عمل": 2, "ترفيه": 0 } };
+    for (const p of [visitor, coder, some]) {
+      const start = share(profilePattern(p, 10, 0));
+      const later = share(profilePattern(p, 10, 1));
+      assert.ok(later > start, `grows: ${start} -> ${later}`);
+      assert.notEqual(profilePattern(p, 10, 0)[0], "وعظ", "never the first card");
+    }
+    assert.ok(share(profilePattern(visitor, 10, 0)) <= 0.13, "a new visitor starts at about 1 in 8");
+    assert.ok(share(profilePattern(coder, 10, 0)) <= 0.09, "not interested: about 1 in 12");
+  });
+});

@@ -108,37 +108,64 @@ export function interestProfile(pool: VideoItem[] = [], subs: Set<string> = new 
  * - some: 2 in 8 (4th and 8th), like before
  * - mainly: about their share of it (at least half), the rest from their other interests if they have any
  */
-export function profilePattern(p: InterestProfile, hour = new Date().getHours()): CategoryKind[] {
-  if (!p.topics.size && p.deen === "none") return getRhythmSlots(hour);
+/**
+ * How long this person has been with us, as 0..1 over two years. Religious content grows very slowly with it,
+ * so the site never feels pushy at first and gently deepens over the years (the goal: love the deen, not
+ * be told about it).
+ */
+export function yearsGrowth(now = Date.now()): number {
+  let first = readLocal<number>("nt_first_seen", 0);
+  if (!first) {
+    first = now;
+    writeLocal("nt_first_seen", first);
+  }
+  return Math.max(0, Math.min(1, (now - first) / (2 * 365 * 86400_000)));
+}
+
+/** Spread n religious cards evenly through L (never the first card), the rest from `other`. */
+function withDeen(L: number, n: number, other: CategoryKind[]): CategoryKind[] {
+  const deenAt = new Set(Array.from({ length: n }, (_, i) => Math.floor(((i + 1) * L) / n) - 1));
+  const out: CategoryKind[] = [];
+  for (let i = 0, j = 0; i < L; i++) out.push(deenAt.has(i) ? "وعظ" : other[j++ % Math.max(1, other.length)] || "عمل");
+  return out;
+}
+
+export function profilePattern(p: InterestProfile, hour = new Date().getHours(), g = yearsGrowth()): CategoryKind[] {
   const work = p.kinds["عمل"];
   const fun = p.kinds["ترفيه"];
   const other = (n: number): CategoryKind[] => {
-    if (!work && !fun) return Array(n).fill("وعظ");
+    if (!work && !fun) {
+      // We don't know their taste yet: a balanced mix, more learning in the morning, lighter at night
+      const share = hour >= 5 && hour < 13 ? 0.6 : hour >= 13 && hour < 20 ? 0.5 : 0.4;
+      const nWork = Math.round(n * share);
+      return Array.from({ length: n }, (_, i) => (Math.floor(((i + 1) * nWork) / n) > Math.floor((i * nWork) / n) ? "عمل" : "ترفيه"));
+    }
     const nWork = Math.round((n * work) / Math.max(1, work + fun));
     return Array.from({ length: n }, (_, i) =>
       Math.floor(((i + 1) * nWork) / n) > Math.floor((i * nWork) / n) ? "عمل" : "ترفيه"
     );
   };
-  if (p.deen === "none") {
-    const o = other(11);
-    return [...o.slice(0, 7), "وعظ", ...o.slice(7)];
+  // New visitor (no picks yet): 1 in 8 at first, slowly up to 1 in 4 over two years
+  if (!p.topics.size && p.deen === "none") {
+    const L = Math.round(1 / (0.125 + 0.125 * g));
+    return withDeen(L, 1, other(L - 1));
   }
+  // Not into religious content: 1 in 12 (a gentle one), slowly up to 1 in 8
+  if (p.deen === "none") {
+    const L = Math.round(1 / (1 / 12 + (1 / 8 - 1 / 12) * g));
+    return withDeen(L, 1, other(L - 1));
+  }
+  // Some interest: 2 in 8, slowly up to 3 in 8
   if (p.deen === "some") {
-    const o = other(6);
-    return [o[0], o[1], o[2], "وعظ", o[3], o[4], o[5], "وعظ"];
+    const n = Math.round(8 * (0.25 + 0.125 * g));
+    return withDeen(8, n, other(8 - n));
   }
   // main: religious first, but their other interests keep a place so it never feels like one long sermon
   const nonDeen = work + fun;
   if (!nonDeen) return Array(8).fill("وعظ");
   const share = p.kinds["وعظ"] / (p.kinds["وعظ"] + nonDeen);
   const nDeen = Math.max(4, Math.min(6, Math.round(8 * share)));
-  const o = other(8 - nDeen);
-  const out: CategoryKind[] = [];
-  for (let i = 0, j = 0; i < 8; i++) {
-    const deenHere = Math.floor(((i + 1) * nDeen) / 8) > Math.floor((i * nDeen) / 8);
-    out.push(deenHere || j >= o.length ? "وعظ" : o[j++]);
-  }
-  return out;
+  return withDeen(8, nDeen, other(8 - nDeen));
 }
 
 /**
@@ -625,12 +652,8 @@ export const AlgoEngine = {
 
     const pattern = profilePattern(profile);
     // How much religious content may show in a row of cards: rare for the uninterested, their share for the rest
-    const deenCap =
-      profile.deen === "none" && knowsUs
-        ? { window: 12, max: 1 }
-        : profile.deen === "main"
-          ? { window: 8, max: pattern.filter((k) => k === "وعظ").length }
-          : { window: CALM.deenWindow, max: CALM.deenMax };
+    // (as many as the rhythm gives this viewer, never more, in any stretch of that length)
+    const deenCap = { window: pattern.length, max: pattern.filter((k) => k === "وعظ").length };
     const out: VideoItem[] = [];
     const trail = trails.get(recentChannels) || [];
     trails.set(recentChannels, trail);
@@ -643,7 +666,7 @@ export const AlgoEngine = {
       const v = x.v;
       if (usedIds.has(v.id)) return false;
       // Religious content only in its own places in the rhythm (never filling someone else's slot)
-      if (x.cat === "وعظ" && wantCat !== "وعظ" && knowsUs && level < 4) return false;
+      if (x.cat === "وعظ" && wantCat !== "وعظ" && level < 4) return false;
       // For someone not into it: only the gentle kind (a story, a few heart-softening minutes)
       if (x.cat === "وعظ" && profile.deen === "none" && knowsUs && !x.gentle && level < 3) return false;
       // For those who love it: a long lesson, then something lighter, so it never gets heavy
