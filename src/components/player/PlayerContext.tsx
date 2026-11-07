@@ -12,6 +12,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ChapterItem, VideoItem } from "@/lib/types";
 import { ClientStore } from "@/lib/client/store";
 import { startSync } from "@/lib/client/sync";
+import { miniHandoff } from "./MiniFloat";
 
 export type SleepOption = 15 | 30 | 60 | "end" | null;
 
@@ -181,6 +182,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const attachSlot = useCallback((el: HTMLElement | null) => {
     if (el) {
       setSlotElement(el);
+      return;
+    }
+    // Shrinking the video on purpose (swipe down / ⌄): straight to the floating window, no in-between frame
+    if (miniHandoff.from) {
+      setSlotElement(null);
       return;
     }
     // Leaving a watch page. Going to another video (a suggestion): the player stays where it is and the next
