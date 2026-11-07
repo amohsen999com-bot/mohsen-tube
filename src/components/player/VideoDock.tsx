@@ -769,6 +769,8 @@ export function VideoDock() {
       const dx = p.clientX - start.x;
       const dy = p.clientY - start.y;
       if (!pulling) {
+        // A downward pull at the top of the page: stop the browser's pull-to-refresh from the first pixel
+        if (dy > 0 && Math.abs(dy) >= Math.abs(dx) && window.scrollY <= 2) e.preventDefault();
         if (Math.hypot(dx, dy) < 8) return;
         if (dy <= 0 || Math.abs(dy) < Math.abs(dx) * 1.3 || window.scrollY > 2) {
           start = null;
@@ -809,6 +811,11 @@ export function VideoDock() {
       if (dy > 130 || (vy > 0.55 && dy > 40)) minimize();
       else reset(true);
     };
+    // No pull-to-refresh on the watch page (Chrome reads it from the root element), so the swipe never reloads
+    const root = document.documentElement;
+    const prevOverscroll = root.style.overscrollBehaviorY;
+    root.style.overscrollBehaviorY = "none";
+    document.body.style.overscrollBehaviorY = "none";
     document.addEventListener("touchstart", onStart, { passive: true });
     document.addEventListener("touchmove", onMove, { passive: false });
     document.addEventListener("touchend", onEnd, { passive: true });
@@ -820,6 +827,8 @@ export function VideoDock() {
       document.removeEventListener("touchcancel", onEnd);
       cancelAnimationFrame(raf);
       reset(false);
+      root.style.overscrollBehaviorY = prevOverscroll;
+      document.body.style.overscrollBehaviorY = "";
     };
   }, [isPhone, isMini, isFullscreen, currentVideo, minimize]);
 

@@ -1669,5 +1669,5 @@ body {
   .nt-min svg { width: 26px; height: 26px; fill: currentColor; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6)); }
   .nt-min:active { transform: scale(.88); background: rgba(0, 0, 0, .55); }
   /* السحب لتحت من الصفحة: من غير ما المتصفح يعمل "تحديث" لما تشد لتحت */
-  body:has(.watch) { overscroll-behavior-y: contain; }
+  html:has(.watch), body:has(.watch) { overscroll-behavior-y: none; }
 }
