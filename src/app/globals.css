@@ -1750,9 +1750,11 @@ html { touch-action: manipulation; }
 /* صفحة الفيديو: مقاسات مبنية من جديد عشان مفيش حاجة فيها تبقى أعرض من الشاشة (الآيفون خطه أعرض شوية،
    فكان صف الأزرار بيتمد برّه الشاشة ويزق الصفحة ويعمل زوم). كل خانة بقت ليها عرض ثابت من الصف، والكلام بيتظبط جواها. */
 .watch, .watch > *, .owner-row, .owner-row > * { min-width: 0; max-width: 100%; }
-.owner-row .actions { grid-template-columns: minmax(0, 1.4fr) repeat(5, minmax(0, 1fr)); }
+.owner-row .actions { grid-template-columns: minmax(0, 1.8fr) repeat(5, minmax(0, 1fr)); }
 .owner-row .actions > *, .owner-row .actions > .btn, .owner-row .actions > .more-wrap > .btn { min-width: 0; max-width: 100%; }
 .owner-row .actions .btn > span:not(.lk-heart):not(.lk-toast) { font-size: min(11.5px, 3vw); }
-.owner-row .actions .like-btn .lk-lbl { font-size: min(11.5px, 3vw); }
+.owner-row .actions .like-btn .lk-lbl { font-size: min(11.5px, 3vw); letter-spacing: 0; text-overflow: clip; }
 .ask .ask-opts { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .ask .ask-opts .ob-chip { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.page-clip { position: relative; overflow-x: clip; }

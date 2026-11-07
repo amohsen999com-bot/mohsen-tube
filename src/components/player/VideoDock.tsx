@@ -947,15 +947,6 @@ export function VideoDock() {
     const grown = expandHandoff.to;
     expandHandoff.from = null;
     expandHandoff.to = null;
-    // iPhone: if the page got zoomed in (a double tap, a tap on the search box), the video page would open
-    // zoomed and pushed sideways. Briefly capping the zoom at 100% makes Safari snap back; pinch-zoom stays.
-    const vv = window.visualViewport;
-    const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
-    if (vv && meta && vv.scale > 1.01) {
-      const orig = meta.content;
-      meta.content = orig + ", maximum-scale=1";
-      window.setTimeout(() => (meta.content = orig), 400);
-    }
     const se = document.scrollingElement;
     if (se && se.scrollLeft !== 0) se.scrollLeft = 0;
     // Stop the grow (it was positioning the floating version) and the page's own entrance fade

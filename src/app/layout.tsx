@@ -45,9 +45,12 @@ export default function RootLayout({
       </head>
       <body>
         <PlayerProvider>
-          <Header />
-          <main id="app">{children}</main>
-          <VideoDock />
+          {/* Nothing inside can make the page wider than the screen (iPhone would zoom out and push it sideways) */}
+          <div className="page-clip">
+            <Header />
+            <main id="app">{children}</main>
+            <VideoDock />
+          </div>
           <SignInGate />
         </PlayerProvider>
       </body>
