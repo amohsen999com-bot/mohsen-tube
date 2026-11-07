@@ -849,14 +849,17 @@ export function VideoDock() {
       expandHandoff.to = null;
       const t = lastSlotRef.current;
       if (t && from.width > 0 && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        // The page will open at the top, so the slot's page position is where it lands on screen
+        // The page will open at the top, so the slot's page position is where it lands on screen.
+        // The player takes its final size right away (shown scaled down so it still looks like the small
+        // window) and grows back to scale 1: YouTube never has to redraw at a new size at the end, so no glitch.
         el.classList.add("growing");
+        el.style.width = t.width + "px";
         el.animate(
           [
-            { transform: "translate3d(" + from.left + "px, " + from.top + "px, 0) scale(1)" },
-            { transform: "translate3d(" + t.left + "px, " + t.top + "px, 0) scale(" + t.width / from.width + ")" },
+            { transform: "translate3d(" + from.left + "px, " + from.top + "px, 0) scale(" + from.width / t.width + ")" },
+            { transform: "translate3d(" + t.left + "px, " + t.top + "px, 0) scale(1)" },
           ],
-          { duration: 420, easing: "cubic-bezier(.2, .85, .25, 1)", fill: "forwards" }
+          { duration: 380, easing: "cubic-bezier(.22, 1, .36, 1)", fill: "forwards" }
         );
         expandHandoff.to = new DOMRect(t.left, t.top, t.width, t.height);
       }
@@ -867,7 +870,9 @@ export function VideoDock() {
   useLayoutEffect(() => {
     const from = expandHandoff.from;
     const el = dockRef.current;
-    if (!from || isMini || !boxPosition || !el) return;
+    // (runs in the very first commit as the page player: before its spot is measured it stands on the remembered one)
+    const spot = boxPosition || lastSlotRef.current;
+    if (!from || isMini || !spot || !el) return;
     const grown = expandHandoff.to;
     expandHandoff.from = null;
     expandHandoff.to = null;
@@ -877,8 +882,15 @@ export function VideoDock() {
     el.style.animation = "none";
     el.style.transform = ""; // (the floating window's own position, cleared before the glide)
     el.style.transition = "";
+    // For a moment after landing, small corrections of the page's player spot slide instead of jumping
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        el.style.transition = "top .22s ease, left .22s ease, width .22s ease, height .22s ease";
+        window.setTimeout(() => (el.style.transition = ""), 900);
+      })
+    );
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const to = { left: boxPosition.left - window.scrollX, top: boxPosition.top - window.scrollY, width: boxPosition.width, height: boxPosition.height };
+    const to = { left: spot.left - window.scrollX, top: spot.top - window.scrollY, width: spot.width, height: spot.height };
     const src = grown || from;
     const dx = src.left - to.left;
     const dy = src.top - to.top;

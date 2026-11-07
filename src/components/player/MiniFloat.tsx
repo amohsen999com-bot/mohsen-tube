@@ -79,6 +79,7 @@ export function MiniFloat({
     const from = miniHandoff.from;
     miniHandoff.from = null;
     el.style.willChange = "transform";
+    el.style.width = "";
     el.style.animation = ""; // (the watch page turned its entrance fade off when it grew from here)
     // No pull-to-refresh while the window floats: a reload would stop the video
     const root = document.documentElement;
@@ -121,6 +122,7 @@ export function MiniFloat({
       el.style.opacity = "";
       el.style.willChange = "";
       el.style.transformOrigin = "";
+      // (width is left alone here: the watch page sets the player's size itself)
     };
   }, [dockRef, apply]);
 
