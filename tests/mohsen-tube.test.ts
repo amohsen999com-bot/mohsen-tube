@@ -571,3 +571,24 @@ describe("Religious content grows slowly over the years", () => {
     assert.ok(share(profilePattern(coder, 10, 0)) <= 0.09, "not interested: about 1 in 12");
   });
 });
+
+describe("A first-time visitor who skipped the picks", () => {
+  it("gets mostly Arabic: 4 in 5 cards, 1 in 5 foreign", async () => {
+    const mem = new Map<string, string>();
+    (globalThis as unknown as { window: unknown }).window = {
+      localStorage: { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) },
+      sessionStorage: { getItem: () => null, setItem: () => {} },
+    };
+    const { AlgoEngine, resetModelCache } = await import("../src/lib/client/algo.ts");
+    mem.clear();
+    resetModelCache();
+    const pool = getFeedVideos({ limit: 2500 }).videos;
+    const used = new Set<string>();
+    const recent: string[] = [];
+    const feed = [...AlgoEngine.buildFeedBatch(pool, 25, used, recent), ...AlgoEngine.buildFeedBatch(pool, 25, used, recent)];
+    const ar = feed.filter((v) => /[؀-ۿ]/.test(v.t)).length;
+    assert.equal(feed.length, 50);
+    assert.equal(ar, 40, `Arabic ${ar}/50`);
+    assert.ok(new Set(feed.map((v) => v.tp)).size >= 8, "and varied");
+  });
+});

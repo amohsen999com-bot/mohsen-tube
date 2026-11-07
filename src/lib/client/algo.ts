@@ -606,6 +606,9 @@ export const AlgoEngine = {
     const picked = new Set(readLocal<string[]>("nt_interests", []));
     const profile = interestProfile(pool, subs);
     const knowsUs = profile.topics.size > 0 || profile.deen !== "none";
+    // A first-time visitor who skipped the picks: mostly Arabic (4 of every 5 cards), 1 in 5 foreign
+    const newcomer = !knowsUs && picked.size === 0;
+    const isAr = (v: VideoItem) => /[؀-ۿ]/.test(v.t);
     // (a topic button tapped on purpose, e.g. كيمياء: the pool is just that topic, so it shows)
     const chipTopic = pool.length > 0 && pool.every((v) => v.tp === pool[0].tp) ? pool[0].tp : null;
     const studyOk = (tp: string) => !STUDY_TOPICS.has(tp) || pickedStudy(tp) || tp === chipTopic;
@@ -682,6 +685,8 @@ export const AlgoEngine = {
       ) {
         return false;
       }
+      if (newcomer && level < 2 && isAr(v) !== (trail.length % 5 !== 4)) return false;
+      if (newcomer && level < 4 && !isAr(v) && last(4).some((p) => !isAr(p))) return false;
       if (level >= 5) return true; // (nothing else left: anything, so the feed never stops)
       if (recentChannels.slice(-(level >= 4 ? 2 : level >= 3 ? 3 : CALM.channelGap)).includes(v.c)) return false;
       // One channel never more than twice in 20 cards (a subscription or a lot of likes included)
