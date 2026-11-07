@@ -1700,3 +1700,18 @@ body {
 /* وهو بيكبر لصفحة الفيديو: من غير ✕ ولا ظل تقيل */
 .dock.mini.float.growing .mini-x { opacity: 0; transition: opacity .12s ease; }
 .dock.mini.float.growing { box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
+
+/* صف الأزرار تحت الفيديو: كل زرار في خانة لوحده، و"استفدت منه" خانته أعرض شوية عشان الكلام ما يعدّيش الحافة */
+.owner-row .actions { grid-template-columns: 1.4fr repeat(5, minmax(0, 1fr)); gap: 6px; padding: 0; background: none; border: 0; border-radius: 0; }
+.owner-row .actions > .btn, .owner-row .actions > .more-wrap > .btn {
+  min-height: 58px; padding: 7px 2px 6px; border-radius: 14px;
+  background: rgba(242, 237, 226, .06); border: 1px solid rgba(242, 237, 226, .07); }
+.owner-row .actions > .more-wrap { display: flex; }
+.owner-row .actions .btn > span:not(.lk-heart):not(.lk-toast) { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.owner-row .actions .like-btn .lk-lbl { font-weight: 600; }
+.owner-row .actions .act-next { margin-top: 0; border: 1px solid rgba(210, 159, 34, .25); }
+@media (hover: none) {
+  .owner-row .actions > .btn:hover, .owner-row .actions > .more-wrap > .btn:hover { background: rgba(242, 237, 226, .06); }
+}
+.owner-row .actions > .btn:active, .owner-row .actions > .more-wrap > .btn:active { background: rgba(242, 237, 226, .12); }
+.owner-row .actions > .btn.act-next { min-height: 42px; padding: 0 12px; background: rgba(210, 159, 34, .1); border-color: rgba(210, 159, 34, .25); color: var(--gold-soft); }
