@@ -716,16 +716,29 @@ export function VideoDock() {
   // Pages opened inside the site in this visit: going "back" stays in the site only when there is one
   const pathname = usePathname();
   const inAppNavs = useRef(0);
+  /** The page before this one, and the last page that wasn't a video page (home, search, a channel...) */
+  const prevPathRef = useRef<string | null>(null);
+  const curPathRef = useRef<string | null>(null);
+  const lastBrowsePathRef = useRef("/");
   useEffect(() => {
     inAppNavs.current++;
+    const here = window.location.pathname + window.location.search;
+    prevPathRef.current = curPathRef.current;
+    curPathRef.current = here;
+    if (!window.location.pathname.startsWith("/watch")) lastBrowsePathRef.current = here;
   }, [pathname]);
 
-  /** Shrink the watch page's video into the floating window (keeps playing), like YouTube's swipe-down. */
+  /**
+   * Shrink the watch page's video into the floating window (keeps playing), like YouTube's swipe-down, and show
+   * the last page you were browsing. Going "back" only when that page is the one right before; after a suggested
+   * video (watch → watch), back would reopen the earlier video, so it goes straight to the browsing page instead.
+   */
   const minimize = useCallback(() => {
     const el = dockRef.current;
     if (el) miniHandoff.from = el.getBoundingClientRect();
-    if (inAppNavs.current > 1) router.back();
-    else router.push("/");
+    const prev = prevPathRef.current;
+    if (inAppNavs.current > 1 && prev && prev === lastBrowsePathRef.current) router.back();
+    else router.push(lastBrowsePathRef.current || "/");
   }, [router]);
 
   // Swipe down on the watch page (from right under the video, when the page is at the top) to shrink it.
