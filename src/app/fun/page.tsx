@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { VideoItem } from "@/lib/types";
 import { VideoCard } from "@/components/video/VideoCard";
-import { buildFunLayout, FunLayout } from "@/lib/client/fun";
+import { buildFunLayout, FunLayout, funVisitSeed } from "@/lib/client/fun";
 import { PageSkeleton } from "@/components/ui/Skeleton";
 
 const MIX_PAGE = 24;
@@ -61,10 +61,11 @@ export default function FunPage() {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/videos?category=fun&limit=1500")
+    const seed = funVisitSeed();
+    fetch(`/api/videos?category=fun&limit=1500&seed=${seed}`)
       .then((r) => r.json())
       .then((data) => {
-        if (active) setLayout(buildFunLayout(data.videos || []));
+        if (active) setLayout(buildFunLayout(data.videos || [], new Date(), seed));
       })
       .catch(() => {
         if (active) setLayout({ picks: [], shelves: [], mix: [] });

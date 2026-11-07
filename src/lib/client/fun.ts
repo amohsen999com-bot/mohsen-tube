@@ -4,13 +4,15 @@
  * صفحة الترفيه: "متعة بتفيد".
  * الفكرة إن الترفيه نفسه يشدّ الناس للشغل والصنعة ولدينهم من غير وعظ مباشر:
  * - رفوف واضحة (بإيدك، عقل المخترع، حكايات، من الأرض للسفرة، مهارة في ربع ساعة، دقايق للقلب).
- * - ترتيب الفيديوهات جوه كل رف = جودة + ذوق المستخدم + جديد + لمسة تتغير كل يوم، ومن غير تكرار نفس القناة.
+ * - كل زيارة خليط جديد: السيرفر بيسحب من مرشحين كتير، والترتيب فيه عشوائية محسوبة،
+ *   واللي اتعرض عليك قريب ومافتحتوش بينزل لتحت، والجديد اللي لسه نازل بيطلع فوق.
+ * - ترتيب الفيديوهات جوه كل رف = جودة + ذوق المستخدم + جديد + تغيير كل زيارة، ومن غير تكرار نفس القناة.
  * - ترتيب الرفوف بيتبع ذوقك، بس الصنعة والحكايات دايمًا فوق.
  * - تحت الرفوف "كمّل اتفرج" بتوزيع ثابت: صنعة ومهارة وحكايات وقلب.
  */
-import { VideoItem } from "@/lib/types";
-import { getVideoAffinity, isResting, getSkips } from "@/lib/client/algo";
-import { ClientStore } from "@/lib/client/store";
+import type { VideoItem } from "../types.ts";
+import { getVideoAffinity, isResting, getSkips, freshBoost } from "./algo.ts";
+import { ClientStore, readLocal, writeLocal } from "./store.ts";
 
 export interface FunShelf {
   key: string;
@@ -36,7 +38,7 @@ const SHELVES: ShelfDef[] = [
     title: "بإيدك",
     hook: "خشب وحديد وبنا… حاجات تتعمل بجد",
     base: 1.0,
-    match: (v) => ["نجارة", "ورشة ومعادن", "بناء وتشطيب", "صيانة وسباكة", "ميكانيكا سيارات"].includes(v.tp),
+    match: (v) => ["نجارة", "ورشة ومعادن", "بناء وتشطيب", "صيانة وسباكة", "ميكانيكا سيارات", "ترميم"].includes(v.tp),
   },
   {
     key: "stories",
@@ -64,7 +66,7 @@ const SHELVES: ShelfDef[] = [
     title: "من الأرض للسفرة",
     hook: "زراعة وطبخ ومهارات البقاء",
     base: 0.75,
-    match: (v) => ["زراعة", "طبخ", "بدائي وبقاء"].includes(v.tp),
+    match: (v) => ["زراعة", "زراعة وتربية", "طبخ", "بدائي وبقاء"].includes(v.tp),
   },
   {
     key: "heart",
@@ -96,8 +98,47 @@ function freshness(v: VideoItem): number {
   return Math.max(0, Math.min(1, (y - 2018) / 8));
 }
 
-export function funScore(v: VideoItem, day: string): number {
-  let score = 0.9 * quality(v) + 1.3 * getVideoAffinity(v) + 0.25 * freshness(v) + 0.18 * hash01(v.id + day);
+/** One seed per visit: a new mix each time you open ترفيه, the same mix if you come back within 20 minutes. */
+export function funVisitSeed(now = Date.now()): string {
+  try {
+    const raw = window.sessionStorage.getItem("nt_fun_seed");
+    if (raw) {
+      const [seed, at] = raw.split("|");
+      if (now - Number(at) < 20 * 60_000) return seed;
+    }
+    const seed = Math.random().toString(36).slice(2, 10);
+    window.sessionStorage.setItem("nt_fun_seed", seed + "|" + now);
+    return seed;
+  } catch {
+    return String(Math.floor(now / 3600_000));
+  }
+}
+
+const SEEN_KEY = "nt_fun_seen";
+const SEEN_HALF = 2 * 86400_000;
+
+/** How strongly you've already been shown a video here (each showing counts 1, half of it fades every 2 days). */
+function seenWeight(seen: Record<string, [number, number]>, id: string, now: number): number {
+  const e = seen[id];
+  return e ? e[0] * Math.pow(0.5, (now - e[1]) / SEEN_HALF) : 0;
+}
+
+/** Remember what was on screen this visit, so the next visit shows other things. */
+export function rememberShown(ids: string[], now = Date.now()): void {
+  const seen = readLocal<Record<string, [number, number]>>(SEEN_KEY, {});
+  for (const id of ids) seen[id] = [seenWeight(seen, id, now) + 1, now];
+  const keys = Object.keys(seen);
+  if (keys.length > 1500) {
+    keys.sort((a, b) => seen[a][1] - seen[b][1]).slice(0, keys.length - 1500).forEach((k) => delete seen[k]);
+  }
+  writeLocal(SEEN_KEY, seen);
+}
+
+export function funScore(v: VideoItem, day: string, seen: Record<string, [number, number]> = {}, now = Date.now()): number {
+  const aff = getVideoAffinity(v);
+  let score =
+    0.9 * quality(v) + 1.3 * aff + 0.25 * freshness(v) + 0.55 * hash01(v.id + day) +
+    0.8 * freshBoost(v, aff, now) - 0.45 * Math.min(seenWeight(seen, v.id, now), 4);
   const progress = ClientStore.getProgress(v.id);
   if (progress && progress[1] >= 0.85) score -= 1.5;
   const [skips] = getSkips(v.id);
@@ -126,11 +167,12 @@ export interface FunLayout {
   mix: VideoItem[];
 }
 
-export function buildFunLayout(pool: VideoItem[], now = new Date()): FunLayout {
-  const day = now.toISOString().slice(0, 10);
+export function buildFunLayout(pool: VideoItem[], now = new Date(), seed = ""): FunLayout {
+  const day = now.toISOString().slice(0, 10) + seed;
+  const seen = readLocal<Record<string, [number, number]>>(SEEN_KEY, {});
   const allowed = pool.filter((v) => ClientStore.isAllowed(v) && !isResting(v.id));
   const scored = new Map<string, number>();
-  for (const v of allowed) scored.set(v.id, funScore(v, day));
+  for (const v of allowed) scored.set(v.id, funScore(v, day, seen, now.getTime()));
   const byScore = (a: VideoItem, b: VideoItem) => (scored.get(b.id) || 0) - (scored.get(a.id) || 0);
 
   const buckets = new Map<string, VideoItem[]>();
@@ -182,5 +224,7 @@ export function buildFunLayout(pool: VideoItem[], now = new Date()): FunLayout {
     mix.push(next);
   }
 
+  // What reached the screen: the picks, the first 6 of each shelf, the first 12 of the mix
+  rememberShown([...picks, ...shelves.flatMap((s) => s.videos.slice(0, 6)), ...mix.slice(0, 12)].map((v) => v.id), now.getTime());
   return { picks, shelves, mix };
 }

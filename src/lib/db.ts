@@ -248,13 +248,15 @@ export function getFeedVideos(options: {
   offset?: number;
   /** Topics the viewer picked or clearly loves: the pool carries plenty of each. */
   interests?: string[];
+  /** ترفيه: each visit draws a different mix (same seed = same draw). */
+  seed?: string;
 }): { videos: VideoItem[]; total: number } {
   const db = getDb();
   const limit = Math.min(Math.max(options.limit || 240, 1), 2500);
   const offset = Math.max(options.offset || 0, 0);
 
   if (options.category === "fun") {
-    const videos = getFunPool();
+    const videos = getFunPool(options.seed || undefined);
     return { videos: videos.slice(offset, offset + limit), total: videos.length };
   }
 
@@ -300,49 +302,95 @@ export function getFeedVideos(options: {
   return { videos: out.slice(offset, offset + limit), total: totalRow.cnt };
 }
 
-/**
- * مخزون صفحة الترفيه: متعة بتفيد. كل نوع ليه سقف عشان نوع واحد ما ياكلش الصفحة:
- * حِرف واختراعات وطبخ وزراعة كلها، حكايات (بودكاست + قصص السيرة القصيرة)، دقايق رقائق قصيرة،
- * ومهارات في ربع ساعة. الترتيب والتوزيع على الرفوف بيحصل عند المستخدم.
- */
 // الترفيه مش مكان أخبار وسياسة ومناظرات: أي عنوان فيه الكلام ده بيتشال من رفوف الدين هنا
 const NO_NEWS = ["غزة", "هدنة", "سياس", "انتخاب", "الرئيس", "الحكومة", "حرب", "إسرائيل", "الشيعة", "شيعي", "الدحيح"]
   .map((w) => `t NOT LIKE '%${w}%'`)
   .join(" AND ");
-const FUN_BUCKETS: Array<{ where: string; limit: number }> = [
-  { where: `g = 'اصنعها بنفسك'`, limit: 400 },
-  { where: `g = 'بودكاست' AND tp != 'بيزنس'`, limit: 80 },
-  { where: `g IN ('علماء', 'أنا السلفي') AND tp = 'سيرة وتاريخ' AND d BETWEEN 180 AND 1500 AND ${NO_NEWS}`, limit: 160 },
-  { where: `g IN ('علماء', 'أنا السلفي') AND tp = 'رقائق' AND d BETWEEN 120 AND 1080 AND ${NO_NEWS}`, limit: 90 },
-  { where: `g = 'كورسات' AND tp IN ('تصميم', 'تصوير', 'خط عربي', 'مونتاج', 'ذكاء اصطناعي', 'إكسل وأوفيس') AND d BETWEEN 120 AND 960`, limit: 120 },
+/**
+ * كل نوع: [الشرط، كام فيديو بيرجع في كل زيارة، كام مرشح بنختار منهم، أقصى عدد من نفس القناة في المرشحين].
+ * المرشحين كتير (أضعاف اللي بيرجع) والسحب منهم عشوائي موزون بالجودة، فكل زيارة بتشوف خليط مختلف.
+ */
+const FUN_BUCKETS: Array<{ where: string; take: number; pool: number; perChannel: number }> = [
+  { where: `tp IN ('نجارة', 'ورشة ومعادن', 'بناء وتشطيب', 'صيانة وسباكة', 'ميكانيكا سيارات', 'ترميم')`, take: 220, pool: 1500, perChannel: 60 },
+  { where: `tp IN ('اختراعات', 'كهرباء وإلكترونيات')`, take: 120, pool: 800, perChannel: 80 },
+  { where: `g = 'اصنعها بنفسك' AND tp IN ('زراعة وتربية', 'طبخ', 'بدائي وبقاء')`, take: 140, pool: 1200, perChannel: 25 },
+  { where: `g = 'بودكاست' AND tp != 'بيزنس'`, take: 90, pool: 1500, perChannel: 300 },
+  { where: `g IN ('علماء', 'أنا السلفي') AND tp = 'سيرة وتاريخ' AND d BETWEEN 180 AND 1500 AND ${NO_NEWS}`, take: 110, pool: 700, perChannel: 120 },
+  { where: `g IN ('علماء', 'أنا السلفي') AND tp = 'رقائق' AND d BETWEEN 120 AND 1080 AND ${NO_NEWS}`, take: 70, pool: 400, perChannel: 80 },
+  { where: `g = 'كورسات' AND tp IN ('تصميم', 'تصوير', 'خط عربي', 'مونتاج', 'ذكاء اصطناعي', 'إكسل وأوفيس', 'طب', 'اقتصاد', 'إدارة وتسويق') AND d BETWEEN 120 AND 960`, take: 110, pool: 900, perChannel: 40 },
 ];
 // قصص وحكايات بتشد أكتر من المناظرات والردود، فبنقدّمها جوه نفس النوع
 const STORY_BOOST = `(CASE WHEN t LIKE '%قصة%' OR t LIKE '%قصص%' OR t LIKE '%حكاية%' OR t LIKE '%سيرة%' THEN 0.25 ELSE 0 END)`;
-let funCache: VideoItem[] | null = null;
+const FUN_SCORE = `(0.4 * COALESCE(s, r) + 0.25 * COALESCE(q, 0.4) + 0.15 * hd + 0.2 * COALESCE(dt, 20200101) / 20261231.0 + ${STORY_BOOST})`;
+let funCandidates: Array<{ where: string; take: number; list: VideoItem[] }> | null = null;
 
-export function getFunPool(): VideoItem[] {
-  if (funCache) return funCache;
+function funBuckets() {
+  if (funCandidates) return funCandidates;
   const db = getDb();
+  funCandidates = FUN_BUCKETS.map((b) => ({
+    where: b.where,
+    take: b.take,
+    list: (
+      db
+        .prepare(
+          `SELECT ${VIDEO_COLS} FROM (
+             SELECT *, ${FUN_SCORE} AS score,
+                    ROW_NUMBER() OVER (PARTITION BY c ORDER BY ${FUN_SCORE} DESC) AS ch_rank
+             FROM videos WHERE is_curated = 1 AND (${b.where})
+           )
+           WHERE ch_rank <= ?
+           ORDER BY score DESC
+           LIMIT ?`
+        )
+        .all(b.perChannel, b.pool) as unknown as RawVideoRow[]
+    ).map(mapRowToVideo),
+  }));
+  return funCandidates;
+}
+
+/** Small seeded random generator (mulberry32) so one visit's draw is repeatable. */
+function seededRandom(seed: string): () => number {
+  let h = 1779033703 ^ seed.length;
+  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 3432918353), (h = (h << 13) | (h >>> 19));
+  let a = h >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * مخزون صفحة الترفيه: متعة بتفيد. كل زيارة (seed) بتسحب خليط جديد من كل نوع، والسحب موزون:
+ * الأحسن ليه فرصة أكبر بس مش مضمون، فالصفحة ما تثبتش. وأي حاجة نزلت آخر أسبوعين من نفس الأنواع بتدخل دايمًا.
+ * الترتيب والتوزيع على الرفوف بيحصل عند المستخدم (src/lib/client/fun.ts).
+ */
+export function getFunPool(seed = new Date().toISOString().slice(0, 10)): VideoItem[] {
+  const rand = seededRandom(seed);
   const seen = new Set<string>();
   const out: VideoItem[] = [];
-  for (const b of FUN_BUCKETS) {
-    const rows = db
-      .prepare(
-        `SELECT ${VIDEO_COLS} FROM videos
-         WHERE is_curated = 1 AND (${b.where})
-         ORDER BY (0.4 * COALESCE(s, r) + 0.25 * COALESCE(q, 0.4) + 0.15 * hd + 0.2 * COALESCE(dt, 20200101) / 20261231.0 + ${STORY_BOOST}) DESC
-         LIMIT ?`
-      )
-      .all(b.limit) as unknown as RawVideoRow[];
-    for (const r of rows) {
-      if (seen.has(r.id)) continue;
-      seen.add(r.id);
-      out.push(mapRowToVideo(r));
-    }
+  const add = (v: VideoItem) => {
+    if (!seen.has(v.id)) (seen.add(v.id), out.push(v));
+  };
+  const buckets = funBuckets();
+  // What just came out, from the same kinds of videos
+  const ids = new Set(buckets.flatMap((b) => b.list.map((v) => v.id)));
+  for (const v of getFreshVideos()) if (ids.has(v.id) || isFunKind(v)) add(v);
+  for (const b of buckets) {
+    // Weighted draw without replacement (key = u^(1/w)): rank i of n gets weight from 1 down to 0.25
+    const n = b.list.length;
+    b.list
+      .map((v, i) => ({ v, key: Math.pow(rand(), 1 / (1 - (0.75 * i) / Math.max(n, 1))) }))
+      .sort((x, y) => y.key - x.key)
+      .slice(0, b.take)
+      .forEach((x) => add(x.v));
   }
-  funCache = out;
   return out;
 }
+
+const FUN_TOPICS = new Set(["نجارة", "ورشة ومعادن", "بناء وتشطيب", "صيانة وسباكة", "ميكانيكا سيارات", "ترميم", "اختراعات", "كهرباء وإلكترونيات", "زراعة وتربية", "طبخ", "بدائي وبقاء"]);
+const isFunKind = (v: VideoItem) => FUN_TOPICS.has(v.tp) || (v.g === "بودكاست" && v.tp !== "بيزنس");
 
 export function getVideosByIds(ids: string[]): VideoItem[] {
   if (!ids.length) return [];

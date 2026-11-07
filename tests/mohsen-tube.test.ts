@@ -483,3 +483,29 @@ describe("Live new uploads (before the catalog rebuild)", () => {
     }
   });
 });
+
+describe("ترفيه changes every visit", () => {
+  it("different visits draw different mixes, and what you were shown moves down", async () => {
+    const mem = new Map<string, string>();
+    const g = globalThis as unknown as { window?: unknown };
+    g.window = {
+      localStorage: { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) },
+      sessionStorage: { getItem: () => null, setItem: () => {} },
+    };
+    const { getFunPool } = await import("../src/lib/db.ts");
+    const { buildFunLayout } = await import("../src/lib/client/fun.ts");
+    const a = getFunPool("visit-a");
+    const b = getFunPool("visit-b");
+    assert.deepEqual(getFunPool("visit-a").map((v) => v.id), a.map((v) => v.id), "same seed, same draw");
+    const inB = new Set(b.map((v) => v.id));
+    const overlap = a.filter((v) => inB.has(v.id)).length / a.length;
+    assert.ok(overlap < 0.6, `two visits share ${Math.round(overlap * 100)}% of the pool`);
+    const first = buildFunLayout(a, new Date(), "visit-a");
+    const firstIds = new Set(first.shelves.flatMap((s) => s.videos.slice(0, 6)).map((v) => v.id));
+    const again = buildFunLayout(a, new Date(), "visit-a2");
+    const againTop = again.shelves.flatMap((s) => s.videos.slice(0, 6)).map((v) => v.id);
+    const repeat = againTop.filter((id) => firstIds.has(id)).length / againTop.length;
+    assert.ok(repeat < 0.35, `same pool, next visit repeats ${Math.round(repeat * 100)}% of the top cards`);
+    assert.ok(first.shelves.some((s) => s.key === "land" && s.videos.some((v) => v.tp === "زراعة وتربية")));
+  });
+});
