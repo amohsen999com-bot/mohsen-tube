@@ -1523,3 +1523,26 @@ body {
 .nt-fs:active { transform: scale(.9); }
 /* في ملء الشاشة: بعيد شوية عن حواف الشاشة المنحنية */
 .dock.is-full .nt-fs, .dock:fullscreen .nt-fs { right: 16px; bottom: 14px; width: 46px; height: 46px; }
+
+/* "حمّل التطبيق": زرار دهبي صغير جنب أيقونات الهيدر، بيختفي بعد التثبيت */
+.app-get { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 12px; margin-inline-end: 6px; border: 1px solid rgba(210, 159, 34, .55); border-radius: 999px; background: linear-gradient(180deg, rgba(210, 159, 34, .22), rgba(210, 159, 34, .1)); color: var(--gold-soft); font: inherit; font-size: 13.5px; font-weight: 700; white-space: nowrap; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background .2s, transform .15s; animation: app-get-in .5s ease both; }
+.app-get:hover { background: linear-gradient(180deg, rgba(210, 159, 34, .32), rgba(210, 159, 34, .16)); }
+.app-get:active { transform: scale(.95); }
+@keyframes app-get-in { from { opacity: 0; transform: translateY(-4px); } }
+@media (max-width: 600px) { .app-get { height: 34px; padding: 0 11px 0 10px; font-size: 13px; margin-inline-end: 4px; } }
+@media (max-width: 370px) { .app-get span { display: none; } .app-get { width: 34px; padding: 0; justify-content: center; } }
+
+.app-sheet-bg { position: fixed; inset: 0; z-index: 200; background: rgba(0, 0, 0, .55); display: flex; align-items: flex-end; justify-content: center; animation: app-fade .2s ease both; }
+.app-sheet { width: min(440px, 100%); margin: 0 12px calc(12px + env(safe-area-inset-bottom)); padding: 22px 20px 16px; border-radius: 22px; background: #232026; border: 1px solid rgba(255, 255, 255, .08); color: #eee; text-align: center; animation: app-up .28s cubic-bezier(.2, .8, .2, 1) both; }
+.app-sheet-icon { width: 64px; height: 64px; border-radius: 16px; margin: 0 auto 10px; display: block; }
+.app-sheet h3 { margin: 0 0 14px; font-size: 18px; }
+.app-sheet ol { list-style: none; margin: 0 0 18px; padding: 0; text-align: start; display: grid; gap: 12px; }
+.app-sheet li { display: flex; align-items: center; gap: 10px; font-size: 15px; line-height: 1.6; }
+.app-sheet li svg { color: var(--gold-soft); }
+.app-step { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: rgba(210, 159, 34, .18); color: var(--gold-soft); font-weight: 700; font-size: 14px; }
+.app-sheet-btns { display: flex; gap: 8px; }
+.app-sheet-btns button { flex: 1; height: 44px; border-radius: 12px; font: inherit; font-weight: 700; cursor: pointer; border: 0; }
+.app-sheet-ok { background: var(--gold); color: #1a1405; }
+.app-sheet-later { background: rgba(255, 255, 255, .08); color: #ddd; }
+@keyframes app-fade { from { opacity: 0; } }
+@keyframes app-up { from { transform: translateY(30px); opacity: 0; } }

@@ -7,6 +7,7 @@ import { AlgoEngine } from "@/lib/client/algo";
 import { normArabic } from "@/lib/arabic";
 import { usePlayer } from "@/components/player/PlayerContext";
 import { LogoMark } from "./LogoMark";
+import { InstallButton } from "./InstallButton";
 
 const SEARCH_HINTS = [
   "ابحث عن درس، شيخ، أو مهارة…",
@@ -354,6 +355,7 @@ export function Header() {
       </form>
 
       <div className="hdr-end">
+        <InstallButton />
         <Link
           href="/subs"
           className={`lib-link subs-link ${isSubs ? "on" : ""}`}

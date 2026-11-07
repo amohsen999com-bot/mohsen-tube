@@ -1,17 +1,31 @@
 {
   "name": "محسن تيوب",
   "short_name": "محسن تيوب",
-  "description": "فيديوهات نافعة: دروس، كورسات، اصنعها بنفسك، ورياضة",
+  "description": "فيديوهات نافعة: علم ودين ومهارات وكورسات، من غير موسيقى ولا تشتيت",
   "lang": "ar",
   "dir": "rtl",
-  "start_url": "./#/",
-  "scope": "./",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#19171b",
   "theme_color": "#19171b",
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
-  ]
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "/"
 }
