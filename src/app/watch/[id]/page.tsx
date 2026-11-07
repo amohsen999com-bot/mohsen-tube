@@ -336,7 +336,7 @@ export default function WatchPage({
 
             <button
               type="button"
-              className="btn icon-btn"
+              className="btn icon-btn act-share"
               onClick={() => setShareModalOpen(true)}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -347,7 +347,7 @@ export default function WatchPage({
 
             <button
               type="button"
-              className="btn icon-btn"
+              className="btn icon-btn act-clip"
               onClick={() => {
                 setClipStart(Math.floor(currentTime));
                 setClipEnd(
@@ -364,7 +364,7 @@ export default function WatchPage({
 
             <button
               type="button"
-              className="btn icon-btn"
+              className="btn icon-btn act-quote"
               onClick={() => setQuoteModalOpen(true)}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -375,7 +375,7 @@ export default function WatchPage({
 
             <button
               type="button"
-              className="btn icon-btn"
+              className="btn icon-btn act-save"
               onClick={() => setSaveModalOpen(true)}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -391,7 +391,10 @@ export default function WatchPage({
                 aria-label="المزيد"
                 onClick={() => setMoreMenuOpen((prev) => !prev)}
               >
-                ⋯
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 10.2a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6zm6 0a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6zm6 0a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6z" />
+                </svg>
+                <span className="more-lbl">المزيد</span>
               </button>
               {moreMenuOpen && (
                 <div className="dl-menu more-menu">
@@ -421,7 +424,7 @@ export default function WatchPage({
             </div>
 
             {series?.nextVideo && (
-              <Link className="btn" href={`/watch/${series.nextVideo.id}`} onClick={() => rememberSeries(series.id)}>
+              <Link className="btn act-next" href={`/watch/${series.nextVideo.id}`} onClick={() => rememberSeries(series.id)}>
                 الحلقة اللي بعدها →
               </Link>
             )}
@@ -469,9 +472,12 @@ export default function WatchPage({
         {!askSubmitted ? (
           <div className="ask">
             <div className="ask-head">
-              <b>سؤال سريع: الفيديو ده مناسب أكتر لمين؟</b>
+              <small className="ask-eyebrow">سؤال سريع · ثانية واحدة</small>
+              <b>
+                <span className="ask-pre">سؤال سريع: </span>الفيديو ده مناسب أكتر لمين؟
+              </b>
             </div>
-            <div className="ob-chips" style={{ marginTop: 8 }}>
+            <div className="ob-chips ask-opts" style={{ marginTop: 8 }}>
               {AUDIENCE_OPTS.map((opt) => (
                 <button
                   key={opt}
@@ -508,18 +514,6 @@ export default function WatchPage({
           </details>
         )}
 
-        {/* Pre-fetched Comments */}
-        {comments.length > 0 && (
-          <div id="comments">
-            <h2 className="sec">التعليقات</h2>
-            {comments.map((c, idx) => (
-              <div key={idx} className="cmt">
-                <b>{c.a.replace(/^@/, "")}</b>
-                <p>{c.t}</p>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Sidebar: Transcript + Queue + Related Videos */}
@@ -599,6 +593,19 @@ export default function WatchPage({
           <VideoCard key={rv.id} video={rv} />
         ))}
       </div>
+
+      {/* Comments: the very last thing on the page (on phones, after the suggested videos) */}
+      {comments.length > 0 && (
+        <div id="comments" className="w-comments">
+          <h2 className="sec">التعليقات</h2>
+          {comments.map((c, idx) => (
+            <div key={idx} className="cmt">
+              <b>{c.a.replace(/^@/, "")}</b>
+              <p>{c.t}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Quote Generator Modal */}
       {quoteModalOpen && (
