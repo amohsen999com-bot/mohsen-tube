@@ -39,7 +39,7 @@ a { color: inherit; text-decoration: none; }
 .search button { background: var(--panel-2); border: 1px solid var(--line); border-right: 0; color: var(--gold);
   padding: 0 18px; border-radius: 22px 0 0 22px; cursor: pointer; font-size: 18px; }
 
-main { max-width: 1600px; margin: 0 auto; padding: 24px 28px 48px; }
+main { max-width: 1600px; margin: 0 auto; padding: 24px 28px 48px; overflow-x: clip; }
 
 /* ---------- الكروت ---------- */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 28px 18px; }
