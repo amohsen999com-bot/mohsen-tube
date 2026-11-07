@@ -3,6 +3,7 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import os from "node:os";
 import { DatabaseSync } from "node:sqlite";
+import { liveFresh, liveFreshById } from "./live-fresh.ts";
 import type {
   ChannelInfo,
   CommentItem,
@@ -209,6 +210,24 @@ const dayNum = (ms: number) => {
 
 /** Everything published in the last 14 days, newest first, so new uploads always reach the feed. */
 export function getFreshVideos(now = Date.now()): VideoItem[] {
+  const fromDb = getFreshFromDb(now);
+  const known = new Set(fromDb.map((v) => v.id));
+  const since = dayNum(now - 14 * 86400_000);
+  const live = liveFresh().filter((v) => (v.dt || 0) >= since && !known.has(v.id) && !isInDb(v.id));
+  return live.length ? [...live, ...fromDb] : fromDb;
+}
+
+const inDbCache = new Map<string, boolean>();
+function isInDb(id: string): boolean {
+  let hit = inDbCache.get(id);
+  if (hit === undefined) {
+    hit = !!getDb().prepare(`SELECT 1 FROM videos WHERE id = ?`).get(id);
+    inDbCache.set(id, hit);
+  }
+  return hit;
+}
+
+function getFreshFromDb(now: number): VideoItem[] {
   if (freshCache && now - freshCache.at < 3600_000) return freshCache.list;
   const rows = getDb()
     .prepare(
@@ -335,7 +354,7 @@ export function getVideosByIds(ids: string[]): VideoItem[] {
     .prepare(`SELECT ${VIDEO_COLS} FROM videos WHERE id IN (${placeholders})`)
     .all(...cleanIds) as unknown as RawVideoRow[];
   const byId = new Map(rows.map((r) => [r.id, mapRowToVideo(r)]));
-  return cleanIds.map((id) => byId.get(id)).filter((v): v is VideoItem => !!v);
+  return cleanIds.map((id) => byId.get(id) || liveFreshById(id)).filter((v): v is VideoItem => !!v);
 }
 
 /** "Watched together" graph: YouTube's related list for each given video (from site/related.json). */
@@ -414,9 +433,11 @@ export function getVideoDetail(videoId: string, preferredSeries?: number): Video
   const row = db
     .prepare(`SELECT ${VIDEO_COLS} FROM videos WHERE id = ?`)
     .get(videoId) as unknown as RawVideoRow | undefined;
-  if (!row) return null;
+  // Just out on YouTube and not in the catalog build yet
+  const live = row ? undefined : liveFreshById(videoId);
+  if (!row && !live) return null;
 
-  const video = mapRowToVideo(row);
+  const video = row ? mapRowToVideo(row) : live!;
 
   const chRow = db
     .prepare(
@@ -711,9 +732,10 @@ export function getChannelPageData(channelName: string) {
     )
     .all(channelName) as unknown as RawVideoRow[];
 
-  if (!videoRows.length && !chRow) return null;
+  const liveRows = liveFresh().filter((v) => v.c === channelName && !isInDb(v.id));
+  if (!videoRows.length && !chRow && !liveRows.length) return null;
 
-  const videos = videoRows.map(mapRowToVideo);
+  const videos = [...liveRows, ...videoRows.map(mapRowToVideo)];
 
   const seriesRows = db
     .prepare(`SELECT id, t, videos_json FROM series WHERE c = ?`)

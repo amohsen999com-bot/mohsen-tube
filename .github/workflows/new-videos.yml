@@ -1,10 +1,12 @@
-# كل ساعة: يسحب الفيديوهات اللي نزلت على يوتيوب من قنوات الموقع ويضيفها لـ data/fresh.jsonl.
-# لو فيه جديد بيعمل commit، فـ Vercel بينشر الموقع تلقائي وتظهر الفيديوهات خلال دقايق.
+# كل 10 دقايق: يسحب الفيديوهات اللي نزلت على يوتيوب من قنوات الموقع ويضيفها لـ data/fresh.jsonl.
+# الموقع بيقرا الملف ده من GitHub على طول (src/lib/live-fresh.ts) من غير نشر جديد.
+# ومرة في اليوم (3 الفجر UTC) بيعمل نشر كامل يدخّلها في قاعدة البيانات والبحث.
 name: New videos
 
 on:
   schedule:
-    - cron: "7 * * * *"
+    - cron: "*/10 * * * *"
+    - cron: "0 3 * * *"
   workflow_dispatch:
 
 permissions:
@@ -33,9 +35,13 @@ jobs:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
         run: node --experimental-strip-types scripts/sync-new.ts
 
+      - name: Daily full rebuild
+        if: github.event.schedule == '0 3 * * *'
+        run: date -u +%F > data/last-rebuild.txt
+
       - name: Publish if anything new
         run: |
-          git add data/fresh.jsonl 2>/dev/null || true
+          git add data/fresh.jsonl data/last-rebuild.txt 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "مفيش جديد"
             exit 0

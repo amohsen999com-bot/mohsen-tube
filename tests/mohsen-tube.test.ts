@@ -461,3 +461,25 @@ describe("Hourly new-video sync rules", () => {
     assert.ok(!titleAllowed("اغنية جديدة", "علماء"));
   });
 });
+
+describe("Live new uploads (before the catalog rebuild)", () => {
+  it("shows a just-synced video in the fresh pool, by id, on its page and on its channel", async () => {
+    const { loadLiveFresh } = await import("../src/lib/live-fresh.ts");
+    const { getFreshVideos, getVideosByIds, getVideoDetail, getChannelPageData } = await import("../src/lib/db.ts");
+    const d = new Date();
+    const dt = d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+    const row = { id: "LIVEtest001", title: "شرح جديد لسه نازل", duration: 600, views: 10, channel: "Youssef Alkhodary", channel_id: "UCIvkyOth3_zSxE32OqQqjtg", group: "كورسات", field: "ذكاء اصطناعي", dt };
+    process.env.MOHSEN_LIVE_FRESH = "on";
+    process.env.MOHSEN_FRESH_URL = "data:text/plain;charset=utf-8," + encodeURIComponent(JSON.stringify(row) + "\n");
+    try {
+      await loadLiveFresh();
+      assert.equal(getFreshVideos()[0].id, "LIVEtest001");
+      assert.equal(getVideosByIds(["LIVEtest001"])[0]?.t, row.title);
+      assert.equal(getVideoDetail("LIVEtest001")?.video.c, "Youssef Alkhodary");
+      assert.equal(getChannelPageData("Youssef Alkhodary")?.videos[0].id, "LIVEtest001");
+    } finally {
+      delete process.env.MOHSEN_LIVE_FRESH;
+      delete process.env.MOHSEN_FRESH_URL;
+    }
+  });
+});

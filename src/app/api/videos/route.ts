@@ -8,9 +8,11 @@ import {
   getVideosByChannels,
   getVideosByIds,
 } from "@/lib/db";
+import { loadLiveFresh } from "@/lib/live-fresh";
 
 export async function GET(request: NextRequest) {
   try {
+    await loadLiveFresh();
     const sp = request.nextUrl.searchParams;
 
     if (sp.get("summary") === "1") {

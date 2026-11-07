@@ -3,10 +3,11 @@
  * البناء على Vercel بيدخّل الملف ده في قاعدة البيانات (scripts/import-channels.ts)، فكل فيديو جديد
  * بيظهر على الموقع بعد النشر التلقائي بدقايق.
  *
- * بيشتغل كل ساعة من GitHub Actions (.github/workflows/new-videos.yml) بمفتاح YouTube Data API الرسمي
- * (YOUTUBE_API_KEY). الحصة المجانية 10,000 وحدة في اليوم، وإحنا بنستعمل حوالي النص:
- * - القنوات النشيطة (نزّلت حاجة آخر 60 يوم) بتتفحص كل ساعة.
- * - باقي القنوات بتتفحص بالدور، كل قناة مرة كل 4 ساعات.
+ * بيشتغل كل 10 دقايق من GitHub Actions (.github/workflows/new-videos.yml) بمفتاح YouTube Data API الرسمي
+ * (YOUTUBE_API_KEY). الحصة المجانية 10,000 وحدة في اليوم، وإحنا بنستعمل حوالي 8,000:
+ * - القنوات النشيطة (نزّلت حاجة آخر 30 يوم) بتتفحص كل 10 دقايق.
+ * - باقي القنوات بتتفحص بالدور، كل قناة مرة كل 8 ساعات.
+ * مفيش مراجعة لأي قناة: أي فيديو جديد من قنوات الموقع بيدخل لوحده لو عدّى قواعد الموقع.
  * فحص القناة = وحدة واحدة، وتفاصيل كل 50 فيديو جديد = وحدة واحدة.
  *
  * نفس قواعد الموقع: من غير Shorts ولا بث مباشر، دقيقتين على الأقل، وعناوين الأغاني والأفلام بتتشال.
@@ -19,7 +20,8 @@ const KEY = process.env.YOUTUBE_API_KEY || "";
 const FRESH = "data/fresh.jsonl";
 const MAX_AGE_DAYS = 14;
 const MIN_SECONDS = 120;
-const ROTATE = 4;
+const SLOT = 10 * 60_000;
+const ROTATE = 48; // 48 دورة × 10 دقايق = كل قناة هادية مرة كل 8 ساعات
 
 // نفس rules.py
 const RELIGIOUS = new Set(["علماء", "أنا السلفي"]);
@@ -72,14 +74,14 @@ async function main() {
   }
   const db = new DatabaseSync("data/mohsen.db", { readOnly: true });
   const now = Date.now();
-  const since = dayNum(now - 60 * 86400_000);
+  const since = dayNum(now - 30 * 86400_000);
   const cutoff = now - MAX_AGE_DAYS * 86400_000;
 
   const freshRows = fs.existsSync(FRESH)
     ? fs.readFileSync(FRESH, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l))
     : [];
   const freshIds = new Set<string>(freshRows.map((r) => r.id));
-  const freshChannels = new Set<string>(freshRows.map((r) => r.channel));
+  const freshChannels = new Set<string>(freshRows.filter((r) => (r.dt || 0) >= since).map((r) => r.channel));
   const blocked = new Set(Object.keys(JSON.parse(fs.readFileSync("data/blocked_channels.json", "utf8"))));
 
   const channels = (db.prepare(`SELECT name, id, grp, field FROM channels ORDER BY name`).all() as Channel[])
@@ -87,7 +89,7 @@ async function main() {
   const active = new Set(
     (db.prepare(`SELECT DISTINCT c FROM videos WHERE is_curated = 1 AND dt >= ?`).all(since) as Array<{ c: string }>).map((r) => r.c)
   );
-  const turn = Math.floor(now / 3600_000) % ROTATE;
+  const turn = Math.floor(now / SLOT) % ROTATE;
   const due = channels.filter((c, i) => active.has(c.name) || freshChannels.has(c.name) || i % ROTATE === turn);
 
   const topicOf = db.prepare(`SELECT tp FROM videos WHERE c = ? AND is_curated = 1 GROUP BY tp ORDER BY COUNT(*) DESC LIMIT 1`);

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getChannelPageData } from "@/lib/db";
+import { loadLiveFresh } from "@/lib/live-fresh";
 
 export async function GET(
   _request: NextRequest,
   context: { params: Promise<{ name: string }> }
 ) {
   try {
+    await loadLiveFresh();
     const { name } = await context.params;
     const decoded = decodeURIComponent(name);
     const data = getChannelPageData(decoded);
