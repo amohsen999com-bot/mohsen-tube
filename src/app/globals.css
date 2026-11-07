@@ -646,7 +646,8 @@ body.scrolled .top { background: rgba(25, 23, 27, .72); backdrop-filter: blur(18
 .tabs { position: relative; }
 .tabs a.on::after { display: none; }
 .tabs .ink { position: absolute; bottom: 2px; height: 2px; border-radius: 2px; background: var(--gold);
-  box-shadow: 0 0 12px rgba(210, 159, 34, .7); transition: left .55s var(--ease), width .55s var(--ease), opacity .3s; pointer-events: none; }
+  box-shadow: 0 0 12px rgba(210, 159, 34, .7); left: 0; width: 100px; transform-origin: 0 0; will-change: transform;
+  transition: transform .55s var(--ease), opacity .3s; pointer-events: none; }
 .tabs a { transition: color .35s var(--ease), background .35s var(--ease); }
 
 /* البحث */
@@ -1637,4 +1638,36 @@ body {
   .ask-fold, .ask .ask-opts .ob-chip { transition: none; }
   .ask .ask-opts .ob-chip.chosen, .ask.done { animation: none; }
   .ask-tick, .ask-check circle, .ask-check path { animation: none; stroke-dashoffset: 0; }
+}
+
+/* ---------- الشباك العايم على الموبايل (زي يوتيوب) ----------
+   مكانه بيتحدد بـ transform بس (من MiniFloat)، فالحركة ناعمة ومتزامنة مع الشاشة. */
+.dock.mini.float { left: 0; top: 0; right: auto; bottom: auto; width: min(54vw, 250px); border-radius: 12px; animation: none;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255, 255, 255, .08); touch-action: none; backface-visibility: hidden; }
+.dock.mini.float .dock-bar, .dock.mini.float .nt-fs { display: none !important; }
+.dock.mini.float .yt-crop-mask, .dock.mini.float .yt-crop-mask iframe { pointer-events: none !important; }
+.mini-grab { position: absolute; inset: 0; z-index: 8; touch-action: none; cursor: grab; -webkit-tap-highlight-color: transparent; }
+.mini-grab:active { cursor: grabbing; }
+.mini-ui { position: absolute; inset: 0; z-index: 9; pointer-events: none; opacity: 0; background: rgba(0, 0, 0, .45);
+  transition: opacity .22s ease; }
+.mini-ui.on { opacity: 1; }
+.mini-ui.on button { pointer-events: auto; }
+.mini-ui button { position: absolute; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; color: #fff;
+  background: rgba(0, 0, 0, .35); -webkit-tap-highlight-color: transparent; transition: transform .15s ease, background .15s ease; }
+.mini-ui button:active { transform: scale(.88); background: rgba(0, 0, 0, .6); }
+.mini-x { top: 6px; left: 6px; width: 34px; height: 34px; }
+.mini-open { top: 6px; right: 6px; width: 34px; height: 34px; }
+.mini-play { top: 50%; left: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; background: rgba(0, 0, 0, .5) !important; }
+.mini-play:active { transform: scale(.9); }
+
+/* سهم "صغّر" فوق الفيديو على الشمال، زي يوتيوب */
+.nt-min { display: none; }
+@media (max-width: 760px) {
+  .nt-min { display: grid; position: absolute; top: 6px; left: 6px; z-index: 7; width: 38px; height: 38px; padding: 0; border: 0;
+    border-radius: 50%; place-items: center; color: #fff; background: rgba(0, 0, 0, .35); -webkit-tap-highlight-color: transparent;
+    transition: transform .15s ease, background .15s ease; }
+  .nt-min svg { width: 26px; height: 26px; fill: currentColor; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6)); }
+  .nt-min:active { transform: scale(.88); background: rgba(0, 0, 0, .55); }
+  /* السحب لتحت من الصفحة: من غير ما المتصفح يعمل "تحديث" لما تشد لتحت */
+  body:has(.watch) { overscroll-behavior-y: contain; }
 }

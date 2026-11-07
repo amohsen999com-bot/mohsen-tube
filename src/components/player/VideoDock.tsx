@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { usePlayer } from "./PlayerContext";
 import {
   onYouTubeReady,
@@ -19,6 +19,7 @@ import {
 import { formatDuration } from "@/lib/arabic";
 import type { VideoItem } from "@/lib/types";
 import { Glyph } from "@/components/ui/Glyph";
+import { MiniFloat, miniHandoff } from "./MiniFloat";
 
 const PLAY_PATH =
   "M8 5.2v13.6c0 .8.9 1.3 1.6.8l10.3-6.8c.6-.4.6-1.2 0-1.6L9.6 4.4C8.9 3.9 8 4.4 8 5.2z";
@@ -701,6 +702,127 @@ export function VideoDock() {
       ? [...chapters].reverse().find((c) => c.t <= effectiveTime)
       : null;
 
+  // Phones get the YouTube-style floating window and the swipe-down on the watch page
+  const [isPhone, setIsPhone] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 760px)");
+    const on = () => setIsPhone(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  const floating = isMini && isPhone;
+
+  // Pages opened inside the site in this visit: going "back" stays in the site only when there is one
+  const pathname = usePathname();
+  const inAppNavs = useRef(0);
+  useEffect(() => {
+    inAppNavs.current++;
+  }, [pathname]);
+
+  /** Shrink the watch page's video into the floating window (keeps playing), like YouTube's swipe-down. */
+  const minimize = useCallback(() => {
+    const el = dockRef.current;
+    if (el) miniHandoff.from = el.getBoundingClientRect();
+    if (inAppNavs.current > 1) router.back();
+    else router.push("/");
+  }, [router]);
+
+  // Swipe down on the watch page (from right under the video, when the page is at the top) to shrink it.
+  // The video itself is YouTube's player, which keeps its own touches, so the pull starts under it.
+  useEffect(() => {
+    if (!isPhone || isMini || isFullscreen || !currentVideo) return;
+    let start: { x: number; y: number; t: number } | null = null;
+    let pulling = false;
+    let lastY = 0;
+    let lastT = 0;
+    let vy = 0;
+    let raf = 0;
+    const page = () => document.querySelector<HTMLElement>(".watch");
+    const reset = (animate: boolean) => {
+      const el = dockRef.current;
+      const w = page();
+      const tr = animate ? "transform .32s cubic-bezier(.2,.8,.2,1), opacity .32s ease" : "";
+      if (el) {
+        el.style.transition = tr;
+        el.style.transform = "";
+      }
+      if (w) {
+        w.style.transition = tr;
+        w.style.opacity = "";
+      }
+    };
+    const onStart = (e: TouchEvent) => {
+      const t = e.target as HTMLElement;
+      if (e.touches.length !== 1 || window.scrollY > 2) return;
+      if (!t.closest(".watch") || t.closest(".dock, button, a, input, textarea, select, [role='button'], details, .ask")) return;
+      const p = e.touches[0];
+      start = { x: p.clientX, y: p.clientY, t: performance.now() };
+      pulling = false;
+      lastY = p.clientY;
+      lastT = start.t;
+      vy = 0;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!start) return;
+      const p = e.touches[0];
+      const dx = p.clientX - start.x;
+      const dy = p.clientY - start.y;
+      if (!pulling) {
+        if (Math.hypot(dx, dy) < 8) return;
+        if (dy <= 0 || Math.abs(dy) < Math.abs(dx) * 1.3 || window.scrollY > 2) {
+          start = null;
+          return;
+        }
+        pulling = true;
+      }
+      e.preventDefault();
+      const now = performance.now();
+      vy = (p.clientY - lastY) / Math.max(8, now - lastT);
+      lastY = p.clientY;
+      lastT = now;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const el = dockRef.current;
+        const w = page();
+        const pull = Math.max(0, dy);
+        const scale = 1 - Math.min(pull, 500) / 1100;
+        if (el) {
+          el.style.transition = "none";
+          el.style.transformOrigin = "50% 0";
+          el.style.transform = "translate3d(0, " + pull * 0.9 + "px, 0) scale(" + scale + ")";
+        }
+        if (w) {
+          w.style.transition = "none";
+          w.style.opacity = String(Math.max(0.25, 1 - pull / 420));
+        }
+      });
+    };
+    const onEnd = () => {
+      if (!start) return;
+      const dy = lastY - start.y;
+      const was = pulling;
+      start = null;
+      pulling = false;
+      cancelAnimationFrame(raf);
+      if (!was) return;
+      if (dy > 130 || (vy > 0.55 && dy > 40)) minimize();
+      else reset(true);
+    };
+    document.addEventListener("touchstart", onStart, { passive: true });
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", onEnd, { passive: true });
+    document.addEventListener("touchcancel", onEnd, { passive: true });
+    return () => {
+      document.removeEventListener("touchstart", onStart);
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend", onEnd);
+      document.removeEventListener("touchcancel", onEnd);
+      cancelAnimationFrame(raf);
+      reset(false);
+    };
+  }, [isPhone, isMini, isFullscreen, currentVideo, minimize]);
+
   // Fullscreen sizing lives in CSS (.dock.is-full), so phones can rotate it sideways when real fullscreen isn't allowed
   const dockStyle: React.CSSProperties = isFullscreen
     ? {}
@@ -721,7 +843,7 @@ export function VideoDock() {
       <div
         ref={dockRef}
         hidden={!currentVideo}
-        className={`dock ${isMini ? "mini" : ""} ${
+        className={`dock ${isMini ? "mini" : ""} ${floating ? "float" : ""} ${
           controlsVisible ? "ctl-on" : ""
         } ${!isPlaying ? "is-paused" : ""} ${isFullscreen ? "is-full" : ""} ${ytControls ? "yt-native" : ""}`}
         style={dockStyle}
@@ -764,6 +886,35 @@ export function VideoDock() {
             </svg>
           </span>
         </div>
+
+        {/* Phones: shrink to the floating window (YouTube's chevron, top left of the video) */}
+        {isPhone && !isMini && !isFullscreen && (
+          <button
+            type="button"
+            className="nt-min"
+            aria-label="صغّر الفيديو"
+            title="صغّر الفيديو"
+            onClick={(e) => {
+              e.stopPropagation();
+              minimize();
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z" />
+            </svg>
+          </button>
+        )}
+
+        {/* The floating window's drag/fling/close layer and buttons */}
+        {floating && (
+          <MiniFloat
+            dockRef={dockRef}
+            isPlaying={isPlaying}
+            onTogglePlay={togglePlay}
+            onExpand={() => currentVideo && router.push("/watch/" + currentVideo.id)}
+            onClose={closePlayer}
+          />
+        )}
 
         {/* Fullscreen, in YouTube's spot (bottom right, YouTube's own button is off): enters/exits like YouTube's. */}
         {!isMini && (
