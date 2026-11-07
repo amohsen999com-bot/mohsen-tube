@@ -46,7 +46,7 @@ export function getVideoCategory(v: VideoItem): CategoryKind {
 
 /** Topics by kind, to read what someone picked at the start. */
 const FUN_TOPICS = new Set(
-  "نجارة|اختراعات|كهرباء وإلكترونيات|زراعة وتربية|زراعة|قصص|طبخ|ترميم|ميكانيكا سيارات|بدائي وبقاء|بناء وتشطيب|صيانة وسباكة|ورشة ومعادن".split("|")
+  "نجارة|اختراعات|تجارب علمية|كهرباء وإلكترونيات|زراعة وتربية|زراعة|قصص|طبخ|ترميم|ميكانيكا سيارات|بدائي وبقاء|بناء وتشطيب|صيانة وسباكة|ورشة ومعادن".split("|")
 );
 const DEEN_TOPICS = new Set(
   "تفسير|سيرة وتاريخ|فقه|فتاوى|حديث|عقيدة|رقائق|ردود وشبهات|القرآن الكريم|أصول وعلوم|دروس عامة".split("|")
@@ -483,14 +483,23 @@ export const AlgoEngine = {
   },
 
   seedInterests(topics: string[], whoLabels: string[] = []): void {
+    // Changing your interests later: what you untick stops pulling the feed toward it
+    const before = readLocal<string[]>("nt_interests", []);
+    for (const tp of before.filter((t) => !topics.includes(t))) {
+      const m = getModel();
+      delete m.f["t:" + tp];
+      delete m.f["d:t:" + tp];
+      delete m.f["n:t:" + tp];
+      for (const w of normArabic(tp).split(/s+/).filter((x) => x.length > 2)) delete m.f["w:" + w];
+    }
     writeLocal("nt_interests", topics.slice(0, 12));
-    for (const tp of topics) {
+    for (const tp of topics.filter((t) => !before.includes(t))) {
       bumpFeature("t:" + tp, 2.2);
       for (const w of normArabic(tp).split(/\s+/).filter(Boolean)) {
         if (w.length > 2) bumpFeature("w:" + w, 1.5);
       }
     }
-    const priors = readLocal<Record<string, number>>("nt_prior", {});
+    const priors: Record<string, number> = {};
     for (const aud of whoLabels) {
       priors["a:" + aud] = 1.8;
     }

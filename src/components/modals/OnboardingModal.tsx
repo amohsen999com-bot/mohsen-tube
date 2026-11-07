@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { AlgoEngine } from "@/lib/client/algo";
-import { writeLocal } from "@/lib/client/store";
+import { readLocal, writeLocal } from "@/lib/client/store";
 import { LogoMark } from "@/components/layout/LogoMark";
 
 const SECTIONS: Array<[string, string[]]> = [
@@ -21,8 +21,8 @@ const SECTIONS: Array<[string, string[]]> = [
     ],
   ],
   ["تعلّم مهارة", ["ذكاء اصطناعي", "برمجة", "إنجليزي", "أمن معلومات", "طب", "تطوير الذات"]],
-  ["مذاكرة", ["كيمياء", "فيزياء", "أحياء", "لغة عربية"]],
-  ["اصنعها بنفسك", ["نجارة", "اختراعات", "كهرباء وإلكترونيات", "زراعة وتربية"]],
+  ["مذاكرة (مواد المدرسة)", ["كيمياء", "فيزياء", "أحياء", "لغة عربية"]],
+  ["اصنعها بنفسك", ["نجارة", "اختراعات", "تجارب علمية", "كهرباء وإلكترونيات", "زراعة وتربية"]],
   ["حكايات", ["قصص"]],
 ];
 
@@ -41,7 +41,8 @@ const GOOD_START = 3;
 
 
 export function OnboardingModal({ onDone }: { onDone: () => void }) {
-  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  // Opened again from "غيّر اهتماماتك": your current picks are already ticked
+  const [selectedTopics, setSelectedTopics] = useState<string[]>(() => readLocal<string[]>("nt_interests", []));
   const [selectedWho, setSelectedWho] = useState<string[]>([]);
 
   const toggleTopic = (tp: string) => {
@@ -62,9 +63,7 @@ export function OnboardingModal({ onDone }: { onDone: () => void }) {
   };
 
   const handleFinish = () => {
-    if (selectedTopics.length || selectedWho.length) {
-      AlgoEngine.seedInterests(selectedTopics, selectedWho);
-    }
+    AlgoEngine.seedInterests(selectedTopics, selectedWho);
     writeLocal("nt_onboarded", 1);
     onDone();
   };

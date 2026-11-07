@@ -1737,3 +1737,8 @@ body {
 .dock.mini.float.growing { box-shadow: 0 0 0 rgba(0, 0, 0, 0); border-radius: 14px; transition: box-shadow .38s ease, border-radius .38s ease; }
 @media (prefers-reduced-motion: reduce) { .expand-veil { animation: none; opacity: 0; } }
 .dock.over-veil { z-index: 41 !important; }
+
+/* "غيّر اهتماماتك" تحت "مقترح لك" */
+.fh-edit { margin-top: 4px; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; color: var(--gold-soft);
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(230, 196, 106, .4); cursor: pointer; }
+.fh-edit:active { opacity: .7; }

@@ -322,6 +322,9 @@ export default function HomePage() {
         <div className="fh-title">
           <small>{greetingTitle}</small>
           <h2>مقترح لك</h2>
+          <button type="button" className="fh-edit" onClick={() => setShowOnboarding(true)}>
+            غيّر اهتماماتك
+          </button>
         </div>
 
         {wird.goal > 0 && (

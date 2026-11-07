@@ -52,7 +52,7 @@ const SHELVES: ShelfDef[] = [
     title: "عقل المخترع",
     hook: "أفكار ذكية وكهربا وإلكترونيات",
     base: 0.85,
-    match: (v) => ["اختراعات", "كهرباء وإلكترونيات"].includes(v.tp),
+    match: (v) => ["اختراعات", "تجارب علمية", "كهرباء وإلكترونيات"].includes(v.tp),
   },
   {
     key: "skills",

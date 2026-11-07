@@ -343,7 +343,7 @@ const NO_NEWS = ["غزة", "هدنة", "سياس", "انتخاب", "الرئيس
  */
 const FUN_BUCKETS: Array<{ where: string; take: number; pool: number; perChannel: number }> = [
   { where: `tp IN ('نجارة', 'ورشة ومعادن', 'بناء وتشطيب', 'صيانة وسباكة', 'ميكانيكا سيارات', 'ترميم')`, take: 220, pool: 1500, perChannel: 60 },
-  { where: `tp IN ('اختراعات', 'كهرباء وإلكترونيات')`, take: 120, pool: 800, perChannel: 80 },
+  { where: `tp IN ('اختراعات', 'تجارب علمية', 'كهرباء وإلكترونيات')`, take: 140, pool: 900, perChannel: 80 },
   { where: `g = 'اصنعها بنفسك' AND tp IN ('زراعة وتربية', 'طبخ', 'بدائي وبقاء')`, take: 140, pool: 1200, perChannel: 25 },
   { where: `g = 'بودكاست' AND tp != 'بيزنس'`, take: 90, pool: 1500, perChannel: 300 },
   { where: `g IN ('علماء', 'أنا السلفي') AND tp = 'سيرة وتاريخ' AND d BETWEEN 180 AND 1500 AND ${NO_NEWS}`, take: 110, pool: 700, perChannel: 120 },
@@ -420,7 +420,7 @@ export function getFunPool(seed = new Date().toISOString().slice(0, 10)): VideoI
   return out;
 }
 
-const FUN_TOPICS = new Set(["نجارة", "ورشة ومعادن", "بناء وتشطيب", "صيانة وسباكة", "ميكانيكا سيارات", "ترميم", "اختراعات", "كهرباء وإلكترونيات", "زراعة وتربية", "طبخ", "بدائي وبقاء"]);
+const FUN_TOPICS = new Set(["نجارة", "ورشة ومعادن", "بناء وتشطيب", "صيانة وسباكة", "ميكانيكا سيارات", "ترميم", "اختراعات", "تجارب علمية", "كهرباء وإلكترونيات", "زراعة وتربية", "طبخ", "بدائي وبقاء"]);
 const isFunKind = (v: VideoItem) => FUN_TOPICS.has(v.tp) || (v.g === "بودكاست" && v.tp !== "بيزنس");
 
 export function getVideosByIds(ids: string[]): VideoItem[] {
