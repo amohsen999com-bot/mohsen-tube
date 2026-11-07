@@ -241,6 +241,31 @@ function getFreshFromDb(now: number): VideoItem[] {
   return freshCache.list;
 }
 
+/**
+ * محتوى المدارس (ابتدائي، إعدادي، ثانوي، بكالوريا): مكانه البحث وصفحة القناة، مش "مقترح لك".
+ * الفيديو مدرسي لو عنوانه بيقول كده، أو لو قناته أغلب فيديوهاتها (ربعها أو أكتر) مدرسية.
+ */
+const SCHOOL_RE =
+  /ثانوي|ثانوية|اعدادي|إعدادي|الاعدادية|الإعدادية|ابتدائي|إبتدائي|الابتدائية|الإبتدائية|الصف (الاول|الأول|الثاني|التاني|الثالث|التالت|الرابع|الخامس|السادس)|(اولى|أولى|تانية|ثانية|تالتة|ثالثة|رابعة|خامسة|سادسة) (ثانوي|اعدادي|إعدادي|ابتدائي)|[123] ثانوي|توجيهي|بكالوريا|باكالوريا|بكلوريا|منهج (الصف|ثانوي|اعدادي)|ليلة الامتحان|ليله الامتحان|ترم (اول|أول|ثاني|تاني)|الترم (الاول|الأول|الثاني|التاني)|\bgrade ?(1[0-2]|[1-9])\b|primary school|middle school|high school|igcse|\bgcse\b|homework|classroom|الواجب المدرسي|حل كتاب|كتاب المدرسة|كتاب الوزارة|كتاب الامتحان|كتاب الأضواء|كتاب الاضواء|سلاح التلميذ/i;
+let schoolChannels: Set<string> | null = null;
+
+function getSchoolChannels(): Set<string> {
+  if (schoolChannels) return schoolChannels;
+  const rows = getDb().prepare(`SELECT c, t FROM videos WHERE is_curated = 1`).all() as Array<{ c: string; t: string }>;
+  const tot = new Map<string, number>();
+  const hit = new Map<string, number>();
+  for (const r of rows) {
+    tot.set(r.c, (tot.get(r.c) || 0) + 1);
+    if (SCHOOL_RE.test(r.t)) hit.set(r.c, (hit.get(r.c) || 0) + 1);
+  }
+  schoolChannels = new Set([...hit].filter(([c, n]) => n >= 8 && n / (tot.get(c) || 1) >= 0.25).map(([c]) => c));
+  return schoolChannels;
+}
+
+export function isSchoolVideo(v: { t: string; c: string }): boolean {
+  return SCHOOL_RE.test(v.t) || getSchoolChannels().has(v.c);
+}
+
 export function getFeedVideos(options: {
   topic?: string;
   category?: "all" | "fun";
@@ -248,6 +273,8 @@ export function getFeedVideos(options: {
   offset?: number;
   /** Topics the viewer picked or clearly loves: the pool carries plenty of each. */
   interests?: string[];
+  /** School content (primary/preparatory/secondary) only for viewers who chose a study subject */
+  school?: boolean;
   /** ترفيه: each visit draws a different mix (same seed = same draw). */
   seed?: string;
 }): { videos: VideoItem[]; total: number } {
@@ -294,7 +321,11 @@ export function getFeedVideos(options: {
   const out: VideoItem[] = [];
   const seen = new Set<string>();
   const add = (rows: VideoItem[]) => {
-    for (const v of rows) if (!seen.has(v.id)) (seen.add(v.id), out.push(v));
+    for (const v of rows) {
+      if (seen.has(v.id) || (!options.school && isSchoolVideo(v))) continue;
+      seen.add(v.id);
+      out.push(v);
+    }
   };
   add(getFreshVideos());
   for (const tp of (options.interests || []).slice(0, 10)) add(getTopicTop(tp, INTEREST_PER_TOPIC));
@@ -371,7 +402,7 @@ export function getFunPool(seed = new Date().toISOString().slice(0, 10)): VideoI
   const seen = new Set<string>();
   const out: VideoItem[] = [];
   const add = (v: VideoItem) => {
-    if (!seen.has(v.id)) (seen.add(v.id), out.push(v));
+    if (!seen.has(v.id) && !isSchoolVideo(v)) (seen.add(v.id), out.push(v));
   };
   const buckets = funBuckets();
   // What just came out, from the same kinds of videos
@@ -541,7 +572,9 @@ export function getVideoDetail(videoId: string, preferredSeries?: number): Video
     }
   }
 
-  const scoredRelated = computeRelated(video, 20);
+  const scoredRelated = isSchoolVideo(video)
+    ? computeRelated(video, 20)
+    : computeRelated(video, 30).filter((v) => !isSchoolVideo(v)).slice(0, 20);
 
   if (series?.nextVideo && !scoredRelated.some((x) => x.id === series!.nextVideo!.id)) {
     scoredRelated.unshift(series.nextVideo);

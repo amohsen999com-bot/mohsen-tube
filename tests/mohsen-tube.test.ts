@@ -509,3 +509,16 @@ describe("ترفيه changes every visit", () => {
     assert.ok(first.shelves.some((s) => s.key === "land" && s.videos.some((v) => v.tp === "زراعة وتربية")));
   });
 });
+
+describe("School lessons stay out of suggestions", () => {
+  it("home and fun pools carry no primary/preparatory/secondary videos unless asked", async () => {
+    const { getFeedVideos, getFunPool, isSchoolVideo } = await import("../src/lib/db.ts");
+    assert.ok(isSchoolVideo({ t: "مراجعة ليلة الامتحان كيمياء الصف الثالث الثانوي", c: "x" }));
+    assert.ok(!isSchoolVideo({ t: "شرح بايثون للمبتدئين", c: "x" }));
+    const home = getFeedVideos({ limit: 2500, interests: ["كيمياء", "إنجليزي"] }).videos;
+    assert.equal(home.filter((v) => isSchoolVideo(v)).length, 0);
+    const withSchool = getFeedVideos({ limit: 2500, interests: ["كيمياء"], school: true }).videos;
+    assert.ok(withSchool.some((v) => isSchoolVideo(v)), "someone who chose a study subject still gets them");
+    assert.equal(getFunPool("s").filter((v) => isSchoolVideo(v)).length, 0);
+  });
+});

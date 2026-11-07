@@ -94,7 +94,7 @@ export default function HomePage() {
       setLoading(true);
       try {
         const [videosRes, summaryRes] = await Promise.all([
-          fetch(`/api/videos?limit=2200&interests=${encodeURIComponent(AlgoEngine.interests().join("|"))}`),
+          fetch(`/api/videos?limit=2200&interests=${encodeURIComponent(AlgoEngine.interests().join("|"))}${AlgoEngine.wantsSchool() ? "&school=1" : ""}`),
           fetch("/api/videos?summary=1"),
         ]);
         if (!active) return;
@@ -418,7 +418,7 @@ export default function HomePage() {
             // The first pool loaded before the picks: fetch again with plenty of what was just picked
             const picks = AlgoEngine.interests();
             if (!picks.length) return rebuildFeed();
-            fetch(`/api/videos?limit=2200&interests=${encodeURIComponent(picks.join("|"))}`)
+            fetch(`/api/videos?limit=2200&interests=${encodeURIComponent(picks.join("|"))}${AlgoEngine.wantsSchool() ? "&school=1" : ""}`)
               .then((r) => r.json())
               .then((d) => (d?.videos?.length ? setPool(d.videos) : rebuildFeed()))
               .catch(() => rebuildFeed());

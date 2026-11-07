@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     const interests = (sp.get("interests") || "").split("|").map((s) => s.trim()).filter(Boolean).slice(0, 10);
     const offset = Math.max(Number(sp.get("offset")) || 0, 0);
 
-    const data = getFeedVideos({ category, topic, limit, offset, interests, seed: (sp.get("seed") || "").slice(0, 40) });
+    const data = getFeedVideos({ category, topic, limit, offset, interests, seed: (sp.get("seed") || "").slice(0, 40), school: sp.get("school") === "1" });
     return NextResponse.json(data);
   } catch (err) {
     console.error("GET /api/videos error:", err);

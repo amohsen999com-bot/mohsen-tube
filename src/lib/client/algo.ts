@@ -410,6 +410,11 @@ export const AlgoEngine = {
     return [...new Set([...picked, ...loved])].slice(0, 8);
   },
 
+  /** School lessons (primary → secondary) only for someone who chose a study subject or clearly watches them */
+  wantsSchool(): boolean {
+    return this.interests().some((tp) => ["كيمياء", "فيزياء", "أحياء", "لغة عربية"].includes(tp));
+  },
+
   seedInterests(topics: string[], whoLabels: string[] = []): void {
     writeLocal("nt_interests", topics.slice(0, 12));
     for (const tp of topics) {
