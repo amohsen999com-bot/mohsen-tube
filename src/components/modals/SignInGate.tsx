@@ -41,7 +41,7 @@ export function SignInGate() {
         <h2 id="sg-title" className="sg-title">
           <span>محسن</span> <span className="sg-gold">تيوب</span>
         </h2>
-        <p className="sg-sub">فيديوهات تنفعك في دينك ودنيتك</p>
+        <p className="sg-sub">فيديوهات خالية من الشبهات والشهوات</p>
         <button
           type="button"
           className="sg-google"
@@ -65,7 +65,6 @@ export function SignInGate() {
           {busy ? "ثواني…" : "ادخل بحساب جوجل"}
         </button>
         {failed && <p className="sg-err">تسجيل الدخول بجوجل مش متاح دلوقتي. جرّب كمان شوية، أو اضغط "بعدين".</p>}
-        <p className="sg-note">بنحفظ بيه محفوظاتك وذوقك على أي جهاز. مش بنبعت حاجة باسمك.</p>
         <button type="button" className="sg-later" onClick={later}>
           بعدين
         </button>
