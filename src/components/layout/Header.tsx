@@ -113,8 +113,8 @@ export function Header() {
       if (!ink) return;
       ink.style.opacity = on ? "1" : "0";
       if (on) {
-        // transform only (no layout work each frame), so the slide stays smooth on phones
-        ink.style.transform = "translateX(" + on.offsetLeft + "px) scaleX(" + on.offsetWidth / 100 + ")";
+        ink.style.left = on.offsetLeft + "px";
+        ink.style.width = on.offsetWidth + "px";
       }
     };
     place();

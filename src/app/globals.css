@@ -646,8 +646,7 @@ body.scrolled .top { background: rgba(25, 23, 27, .72); backdrop-filter: blur(18
 .tabs { position: relative; }
 .tabs a.on::after { display: none; }
 .tabs .ink { position: absolute; bottom: 2px; height: 2px; border-radius: 2px; background: var(--gold);
-  box-shadow: 0 0 12px rgba(210, 159, 34, .7); left: 0; width: 100px; transform-origin: 0 0; will-change: transform;
-  transition: transform .55s var(--ease), opacity .3s; pointer-events: none; }
+  box-shadow: 0 0 12px rgba(210, 159, 34, .7); transition: left .55s var(--ease), width .55s var(--ease), opacity .3s; pointer-events: none; }
 .tabs a { transition: color .35s var(--ease), background .35s var(--ease); }
 
 /* البحث */
