@@ -75,6 +75,69 @@ export function getRhythmSlots(hour = new Date().getHours(), picks: string[] = r
 }
 
 /**
+ * What this viewer is into: the topics they picked + the ones they've clearly come to love, and how much
+ * they care for religious content (none / some / main). Empty topics = we know nothing yet (new visitor).
+ */
+export type InterestProfile = { topics: Set<string>; deen: "none" | "some" | "main"; kinds: Record<CategoryKind, number> };
+
+export function interestProfile(pool: VideoItem[] = [], subs: Set<string> = new Set()): InterestProfile {
+  const picked = readLocal<string[]>("nt_interests", []);
+  const loved = Object.keys(getModel().f)
+    .filter((k) => k.startsWith("t:") && k !== "t:دروس عامة" && featureValue(k) > 0.8)
+    .map((k) => k.slice(2));
+  const topics = new Set([...picked, ...loved]);
+  const kinds: Record<CategoryKind, number> = { "وعظ": 0, "عمل": 0, "ترفيه": 0 };
+  for (const tp of topics) kinds[topicKind(tp)]++;
+  // Subscribed to (or clearly loving) a religious channel also counts as caring for religious content
+  const deenChannels = new Set(pool.filter((v) => getVideoCategory(v) === "وعظ").map((v) => v.c));
+  const deenLove =
+    [...subs].filter((c) => deenChannels.has(c)).length + (featureValue("g:وعظ") > 0.6 ? 1 : 0);
+  kinds["وعظ"] += deenLove;
+  const total = kinds["وعظ"] + kinds["عمل"] + kinds["ترفيه"];
+  const deen = kinds["وعظ"] === 0 ? "none" : kinds["وعظ"] * 2 >= total ? "main" : "some";
+  return { topics, deen, kinds };
+}
+
+/**
+ * The repeating order of kinds for someone whose interests we know:
+ * - not into religious content: 1 card in 12 (a gentle one), the rest from their own kinds of interests
+ * - some: 2 in 8 (4th and 8th), like before
+ * - mainly: about their share of it (at least half), the rest from their other interests if they have any
+ */
+export function profilePattern(p: InterestProfile, hour = new Date().getHours()): CategoryKind[] {
+  if (!p.topics.size && p.deen === "none") return getRhythmSlots(hour);
+  const work = p.kinds["عمل"];
+  const fun = p.kinds["ترفيه"];
+  const other = (n: number): CategoryKind[] => {
+    if (!work && !fun) return Array(n).fill("وعظ");
+    const nWork = Math.round((n * work) / Math.max(1, work + fun));
+    return Array.from({ length: n }, (_, i) =>
+      Math.floor(((i + 1) * nWork) / n) > Math.floor((i * nWork) / n) ? "عمل" : "ترفيه"
+    );
+  };
+  if (p.deen === "none") {
+    const o = other(11);
+    return [...o.slice(0, 7), "وعظ", ...o.slice(7)];
+  }
+  if (p.deen === "some") {
+    const o = other(6);
+    return [o[0], o[1], o[2], "وعظ", o[3], o[4], o[5], "وعظ"];
+  }
+  // main: religious first, but their other interests keep a place so it never feels like one long sermon
+  const nonDeen = work + fun;
+  if (!nonDeen) return Array(8).fill("وعظ");
+  const share = p.kinds["وعظ"] / (p.kinds["وعظ"] + nonDeen);
+  const nDeen = Math.max(4, Math.min(6, Math.round(8 * share)));
+  const o = other(8 - nDeen);
+  const out: CategoryKind[] = [];
+  for (let i = 0, j = 0; i < 8; i++) {
+    const deenHere = Math.floor(((i + 1) * nDeen) / 8) > Math.floor((i * nDeen) / 8);
+    out.push(deenHere || j >= o.length ? "وعظ" : o[j++]);
+  }
+  return out;
+}
+
+/**
  * "رزانة": how far apart similar things must be in the feed, whatever the scores say. A subscription,
  * a like or "عايز أشوف حاجات زي دي أكتر" raises a channel or topic, but never lets it flood the screen.
  */
@@ -501,6 +564,14 @@ export const AlgoEngine = {
     const learned = Object.keys(getModel().f).length > 0;
     const now = Date.now();
     const picked = new Set(readLocal<string[]>("nt_interests", []));
+    const profile = interestProfile(pool, subs);
+    const knowsUs = profile.topics.size > 0 || profile.deen !== "none";
+    const inInterest = (v: VideoItem) =>
+      !knowsUs ||
+      getVideoCategory(v) === "وعظ" ||
+      profile.topics.has(v.tp) ||
+      subs.has(v.c) ||
+      featureValue("c:" + v.c) > 0.8;
 
     const scored = candidates.map((v) => {
       const damp = CHANNEL_DAMP[v.c] || 0;
@@ -514,10 +585,15 @@ export const AlgoEngine = {
       const fresh = newFromLoved(v, subs, now);
       const isNew = freshBoost(v, aff, now);
       const pickedBoost = picked.has(v.tp) ? 0.8 : 0;
+      // Someone not into religious content gets the rare one as a gentle story or a few heart-softening minutes
+      const gentle =
+        profile.deen === "none" && getVideoCategory(v) === "وعظ" && (CALM_TOPICS.has(v.tp) || STORY_RE.test(v.t)) && (v.d || 0) <= 1500
+          ? 0.9
+          : 0;
       const [gb, gwhy, step] = Growth.bonus(v, aff, ctx);
       const score =
         1.35 * aff + 0.45 * tFit + 0.75 * quality + subBoost - skipPenalty +
-        1.1 * Math.tanh(relScore) + fresh + isNew + pickedBoost + gb - damp;
+        1.1 * Math.tanh(relScore) + fresh + isNew + pickedBoost + gentle + gb - damp;
       const why =
         fresh > 0.3 || isNew >= 1.8 ? "جديد من " + v.c
         : mood > 0.6 ? "على مزاجك دلوقتي"
@@ -525,12 +601,19 @@ export const AlgoEngine = {
         : step && getVideoCategory(v) !== "ترفيه" ? step
         : relScore > 0.5 ? "شبه حاجة كمّلتها"
         : null;
-      return { v, score, cat: getVideoCategory(v), why };
+      return { v, score, cat: getVideoCategory(v), why, mine: inInterest(v), gentle: gentle > 0 };
     });
 
     scored.sort((a, b) => b.score - a.score);
 
-    const pattern = getRhythmSlots();
+    const pattern = profilePattern(profile);
+    // How much religious content may show in a row of cards: rare for the uninterested, their share for the rest
+    const deenCap =
+      profile.deen === "none" && knowsUs
+        ? { window: 12, max: 1 }
+        : profile.deen === "main"
+          ? { window: 8, max: pattern.filter((k) => k === "وعظ").length }
+          : { window: CALM.deenWindow, max: CALM.deenMax };
     const out: VideoItem[] = [];
     const trail = trails.get(recentChannels) || [];
     trails.set(recentChannels, trail);
@@ -542,17 +625,29 @@ export const AlgoEngine = {
     const fits = (x: (typeof scored)[number], wantCat: CategoryKind, level: number): boolean => {
       const v = x.v;
       if (usedIds.has(v.id)) return false;
-      if (level >= 4) return true;
-      if (recentChannels.slice(-(level >= 3 ? 3 : CALM.channelGap)).includes(v.c)) return false;
-      if (level >= 3) return true;
-      if (last(19).filter((p) => p.c === v.c).length >= CALM.channelPer20) return false;
-      if (subs.has(v.c) && last(CALM.subsWindow - 1).some((p) => subs.has(p.c))) return false;
+      // Religious content only in its own places in the rhythm (never filling someone else's slot)
+      if (x.cat === "وعظ" && wantCat !== "وعظ" && knowsUs && level < 4) return false;
+      // For someone not into it: only the gentle kind (a story, a few heart-softening minutes)
+      if (x.cat === "وعظ" && profile.deen === "none" && knowsUs && !x.gentle && level < 3) return false;
+      // For those who love it: a long lesson, then something lighter, so it never gets heavy
+      if (x.cat === "وعظ" && level < 2) {
+        const lastDeen = [...trail].reverse().find((p) => getVideoCategory(p) === "وعظ");
+        if (lastDeen && (lastDeen.d || 0) > 2400 && (v.d || 0) > 2400) return false;
+      }
+      // Religious content never goes over this viewer's share, whatever else gets relaxed
       if (
         x.cat === "وعظ" &&
-        last(CALM.deenWindow - 1).filter((p) => getVideoCategory(p) === "وعظ").length >= CALM.deenMax
+        wantCat !== "وعظ" &&
+        last(deenCap.window - 1).filter((p) => getVideoCategory(p) === "وعظ").length >= deenCap.max
       ) {
         return false;
       }
+      if (level >= 5) return true; // (nothing else left: anything, so the feed never stops)
+      if (recentChannels.slice(-(level >= 4 ? 2 : level >= 3 ? 3 : CALM.channelGap)).includes(v.c)) return false;
+      // One channel never more than twice in 20 cards (a subscription or a lot of likes included)
+      if (last(19).filter((p) => p.c === v.c).length >= CALM.channelPer20) return false;
+      if (level >= 3) return true;
+      if (subs.has(v.c) && last(CALM.subsWindow - 1).some((p) => subs.has(p.c))) return false;
       if (level >= 2) return true;
       if (isTopic(v.tp)) {
         if (last(CALM.topicGap).some((p) => p.tp === v.tp)) return false;
@@ -564,9 +659,15 @@ export const AlgoEngine = {
     for (let i = 0; i < count && scored.length > 0; i++) {
       const wantCat = pattern[trail.length % pattern.length];
       let pickIdx = -1;
+      // Only what this viewer is into; outside their interests only as a last resort (same kind), so the feed never runs dry
       for (let level = 0; level <= 4 && pickIdx < 0; level++) {
-        pickIdx = scored.findIndex((x) => fits(x, wantCat, level));
+        pickIdx = scored.findIndex((x) => x.mine && fits(x, wantCat, level));
       }
+      // (then: the same kind from outside their interests, then anything that keeps the channel limits,
+      // and only when nothing at all is left, no limits, so the feed never stops)
+      if (pickIdx < 0) pickIdx = scored.findIndex((x) => x.cat === wantCat && fits(x, wantCat, 3));
+      if (pickIdx < 0) pickIdx = scored.findIndex((x) => fits(x, wantCat, 4));
+      if (pickIdx < 0) pickIdx = scored.findIndex((x) => fits(x, wantCat, 5));
       if (pickIdx < 0) break;
 
       const pick = scored.splice(pickIdx, 1)[0];

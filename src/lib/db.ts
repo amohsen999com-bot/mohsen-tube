@@ -144,7 +144,7 @@ export function getCatalogSummary() {
 
 /** Max videos one channel can contribute to each kind's share of the home pool */
 const FEED_CHANNEL_CAP = 25;
-const INTEREST_PER_TOPIC = 90;
+const INTEREST_PER_TOPIC = 150;
 /** How many of each kind the home pool carries (religious is the smallest share: the feed shows 2 in 8). */
 const POOL_SHARE: Array<[string, number]> = [
   [`g IN ('علماء', 'أنا السلفي', 'القرآن الكريم')`, 260],

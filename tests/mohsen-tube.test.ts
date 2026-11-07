@@ -393,10 +393,12 @@ describe("Calm feed (رزانة)", () => {
       const sub = feed.filter((v) => v.c === "القناة السلفية").length;
       assert.ok(sub >= 2 && sub <= 4, `subscribed channel shows but doesn't flood: ${sub}/40`);
       for (let i = 0; i < feed.length; i++) {
-        const win8 = feed.slice(Math.max(0, i - CALM.deenWindow + 1), i + 1);
-        assert.ok(win8.filter((v) => getVideoCategory(v) === "وعظ").length <= CALM.deenMax, `religious cap at ${i}`);
-        const prev = feed.slice(Math.max(0, i - CALM.channelGap), i).map((v) => v.c);
+        // (this viewer subscribed to and liked a religious channel: religious content may lead, but the channel doesn't flood)
+        void getVideoCategory;
+        // (7 religious channels only in this made-up pool: the guaranteed minimum is 2 cards apart and 2 in any 20)
+        const prev = feed.slice(Math.max(0, i - 2), i).map((v) => v.c);
         assert.ok(!prev.includes(feed[i].c), `channel gap at ${i}`);
+        assert.ok(feed.slice(Math.max(0, i - 19), i + 1).filter((v) => v.c === feed[i].c).length <= CALM.channelPer20, `channel per 20 at ${i}`);
         if (i > 0) assert.notEqual(feed[i].tp, feed[i - 1].tp, `same topic twice at ${i}`);
       }
 
@@ -520,5 +522,34 @@ describe("School lessons stay out of suggestions", () => {
     const withSchool = getFeedVideos({ limit: 2500, interests: ["كيمياء"], school: true }).videos;
     assert.ok(withSchool.some((v) => isSchoolVideo(v)), "someone who chose a study subject still gets them");
     assert.equal(getFunPool("s").filter((v) => isSchoolVideo(v)).length, 0);
+  });
+});
+
+describe("Only what you're into; religious content by interest", () => {
+  it("someone into programming gets programming, and religious content only rarely and gently", async () => {
+    const mem = new Map<string, string>();
+    (globalThis as unknown as { window: unknown }).window = {
+      localStorage: { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) },
+      sessionStorage: { getItem: () => null, setItem: () => {} },
+    };
+    const { AlgoEngine, getVideoCategory, resetModelCache } = await import("../src/lib/client/algo.ts");
+    const feedFor = (picks: string[]) => {
+      mem.clear();
+      resetModelCache();
+      AlgoEngine.seedInterests(picks, []);
+      const pool = getFeedVideos({ limit: 2500, interests: AlgoEngine.interests() }).videos;
+      const used = new Set<string>();
+      const recent: string[] = [];
+      return [...AlgoEngine.buildFeedBatch(pool, 24, used, recent), ...AlgoEngine.buildFeedBatch(pool, 24, used, recent)];
+    };
+    const coder = feedFor(["برمجة", "ذكاء اصطناعي"]);
+    const deen = coder.filter((v) => getVideoCategory(v) === "وعظ");
+    assert.equal(coder.filter((v) => getVideoCategory(v) !== "وعظ" && !["برمجة", "ذكاء اصطناعي"].includes(v.tp)).length, 0, "nothing outside the interests");
+    assert.ok(deen.length >= 2 && deen.length <= 5, `religious stays rare: ${deen.length}/48`);
+    assert.ok(deen.every((v) => (v.d || 0) <= 1500), "and gentle (short)");
+    const devout = feedFor(["تفسير", "حديث", "عقيدة"]);
+    const kinds = new Set(devout.map((v) => v.tp));
+    assert.ok(devout.every((v) => getVideoCategory(v) === "وعظ"), "religious viewers get religious content");
+    assert.ok(kinds.size >= 4, `with variety: ${[...kinds].join(", ")}`);
   });
 });
