@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { usePlayer } from "./PlayerContext";
 import {
@@ -19,7 +19,7 @@ import {
 import { formatDuration } from "@/lib/arabic";
 import type { VideoItem } from "@/lib/types";
 import { Glyph } from "@/components/ui/Glyph";
-import { MiniFloat, miniHandoff } from "./MiniFloat";
+import { MiniFloat, miniHandoff, expandHandoff } from "./MiniFloat";
 
 const PLAY_PATH =
   "M8 5.2v13.6c0 .8.9 1.3 1.6.8l10.3-6.8c.6-.4.6-1.2 0-1.6L9.6 4.4C8.9 3.9 8 4.4 8 5.2z";
@@ -832,6 +832,68 @@ export function VideoDock() {
     };
   }, [isPhone, isMini, isFullscreen, currentVideo, minimize]);
 
+  // Floating window → watch page, like YouTube: the window starts growing the moment you tap it, toward where
+  // the video sits on its page (remembered from the last visit), so it's already big while the page loads.
+  // When the page places the player, a short final glide closes any small gap. No fades fighting it.
+  const lastSlotRef = useRef<{ left: number; top: number; width: number; height: number } | null>(null);
+  useEffect(() => {
+    if (!isMini && boxPosition && !isFullscreen) lastSlotRef.current = { ...boxPosition };
+  }, [isMini, boxPosition, isFullscreen]);
+
+  const expandFromMini = useCallback(() => {
+    const el = dockRef.current;
+    if (!currentVideo) return;
+    if (el) {
+      const from = el.getBoundingClientRect();
+      expandHandoff.from = from;
+      expandHandoff.to = null;
+      const t = lastSlotRef.current;
+      if (t && from.width > 0 && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        // The page will open at the top, so the slot's page position is where it lands on screen
+        el.classList.add("growing");
+        el.animate(
+          [
+            { transform: "translate3d(" + from.left + "px, " + from.top + "px, 0) scale(1)" },
+            { transform: "translate3d(" + t.left + "px, " + t.top + "px, 0) scale(" + t.width / from.width + ")" },
+          ],
+          { duration: 420, easing: "cubic-bezier(.2, .85, .25, 1)", fill: "forwards" }
+        );
+        expandHandoff.to = new DOMRect(t.left, t.top, t.width, t.height);
+      }
+    }
+    router.push("/watch/" + currentVideo.id);
+  }, [currentVideo, router]);
+
+  useLayoutEffect(() => {
+    const from = expandHandoff.from;
+    const el = dockRef.current;
+    if (!from || isMini || !boxPosition || !el) return;
+    const grown = expandHandoff.to;
+    expandHandoff.from = null;
+    expandHandoff.to = null;
+    // Stop the grow (it was positioning the floating version) and the page's own entrance fade
+    el.getAnimations().forEach((a) => a.cancel());
+    el.classList.remove("growing");
+    el.style.animation = "none";
+    el.style.transform = ""; // (the floating window's own position, cleared before the glide)
+    el.style.transition = "";
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const to = { left: boxPosition.left - window.scrollX, top: boxPosition.top - window.scrollY, width: boxPosition.width, height: boxPosition.height };
+    const src = grown || from;
+    const dx = src.left - to.left;
+    const dy = src.top - to.top;
+    const sx = src.width / to.width;
+    const sy = src.height / to.height;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(sx - 1) < 0.01) return;
+    el.animate(
+      [
+        { transformOrigin: "0 0", transform: "translate(" + dx + "px, " + dy + "px) scale(" + sx + ", " + sy + ")", borderRadius: grown ? "14px" : "12px" },
+        { transformOrigin: "0 0", transform: "none", borderRadius: "14px" },
+      ],
+      { duration: grown ? 260 : 440, easing: "cubic-bezier(.2, .85, .25, 1)" }
+    );
+  }, [isMini, boxPosition]);
+
   // Fullscreen sizing lives in CSS (.dock.is-full), so phones can rotate it sideways when real fullscreen isn't allowed
   const dockStyle: React.CSSProperties = isFullscreen
     ? {}
@@ -845,7 +907,9 @@ export function VideoDock() {
             width: `${boxPosition.width}px`,
             height: `${boxPosition.height}px`,
           }
-        : { display: "none" };
+        : lastSlotRef.current // (one frame before the page measures its slot: stay where the video was, no blink)
+          ? { position: "absolute", top: lastSlotRef.current.top + "px", left: lastSlotRef.current.left + "px", width: lastSlotRef.current.width + "px", height: lastSlotRef.current.height + "px" }
+          : { display: "none" };
 
   return (
     <>
@@ -923,7 +987,7 @@ export function VideoDock() {
                 ? "url(https://i.ytimg.com/vi/" + currentVideo.id + "/" + (currentVideo.hd ? "maxresdefault" : "hqdefault") + ".jpg), url(https://i.ytimg.com/vi/" + currentVideo.id + "/hqdefault.jpg)"
                 : null
             }
-            onExpand={() => currentVideo && router.push("/watch/" + currentVideo.id)}
+            onExpand={expandFromMini}
             onClose={closePlayer}
           />
         )}

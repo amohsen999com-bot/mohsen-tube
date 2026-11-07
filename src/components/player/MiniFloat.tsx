@@ -20,6 +20,8 @@ const SPRING = "transform 480ms cubic-bezier(.18,.89,.32,1.12)";
 
 /** Where the floating window was when it came from the watch page (set by the swipe-down). */
 export const miniHandoff: { from: DOMRect | null } = { from: null };
+/** Where the floating window was when it was tapped open (the watch page grows the video from there). */
+export const expandHandoff: { from: DOMRect | null; to: DOMRect | null } = { from: null, to: null };
 
 function readCorner(): Corner {
   try {
@@ -77,6 +79,7 @@ export function MiniFloat({
     const from = miniHandoff.from;
     miniHandoff.from = null;
     el.style.willChange = "transform";
+    el.style.animation = ""; // (the watch page turned its entrance fade off when it grew from here)
     // No pull-to-refresh while the window floats: a reload would stop the video
     const root = document.documentElement;
     const prevOver = root.style.overscrollBehaviorY;

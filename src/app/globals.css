@@ -1698,3 +1698,6 @@ body {
   -webkit-tap-highlight-color: transparent; transition: transform .15s ease, background .15s ease; }
 .dock.mini.float .mini-x:active { transform: scale(.85); background: rgba(0, 0, 0, .75); }
 .mini-grab { cursor: pointer; }
+/* وهو بيكبر لصفحة الفيديو: من غير ✕ ولا ظل تقيل */
+.dock.mini.float.growing .mini-x { opacity: 0; transition: opacity .12s ease; }
+.dock.mini.float.growing { box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
