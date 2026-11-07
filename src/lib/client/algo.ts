@@ -51,6 +51,10 @@ const FUN_TOPICS = new Set(
 const DEEN_TOPICS = new Set(
   "تفسير|سيرة وتاريخ|فقه|فتاوى|حديث|عقيدة|رقائق|ردود وشبهات|القرآن الكريم|أصول وعلوم|دروس عامة".split("|")
 );
+/** School study subjects: shown only to someone who picked them on purpose (never learned from a stray watch) */
+export const STUDY_TOPICS = new Set(["كيمياء", "فيزياء", "أحياء", "لغة عربية"]);
+const pickedStudy = (tp: string) => readLocal<string[]>("nt_interests", []).includes(tp);
+
 export const topicKind = (tp: string): CategoryKind =>
   DEEN_TOPICS.has(tp) ? "وعظ" : FUN_TOPICS.has(tp) ? "ترفيه" : "عمل";
 
@@ -85,7 +89,7 @@ export function interestProfile(pool: VideoItem[] = [], subs: Set<string> = new 
   const loved = Object.keys(getModel().f)
     .filter((k) => k.startsWith("t:") && k !== "t:دروس عامة" && featureValue(k) > 0.8)
     .map((k) => k.slice(2));
-  const topics = new Set([...picked, ...loved]);
+  const topics = new Set([...picked, ...loved.filter((tp) => !STUDY_TOPICS.has(tp))]);
   const kinds: Record<CategoryKind, number> = { "وعظ": 0, "عمل": 0, "ترفيه": 0 };
   for (const tp of topics) kinds[topicKind(tp)]++;
   // Subscribed to (or clearly loving) a religious channel also counts as caring for religious content
@@ -467,15 +471,15 @@ export const AlgoEngine = {
     const loved = Object.keys(getModel().f)
       .filter((k) => k.startsWith("t:") && k !== "t:دروس عامة")
       .map((k) => [k.slice(2), featureValue(k)] as const)
-      .filter(([, val]) => val > 0.8)
+      .filter(([tp, val]) => val > 0.8 && !STUDY_TOPICS.has(tp))
       .sort((a, b) => b[1] - a[1])
       .map(([tp]) => tp);
     return [...new Set([...picked, ...loved])].slice(0, 8);
   },
 
-  /** School lessons (primary → secondary) only for someone who chose a study subject or clearly watches them */
+  /** School lessons (primary → secondary) only for someone who chose a study subject on purpose */
   wantsSchool(): boolean {
-    return this.interests().some((tp) => ["كيمياء", "فيزياء", "أحياء", "لغة عربية"].includes(tp));
+    return readLocal<string[]>("nt_interests", []).some((tp) => STUDY_TOPICS.has(tp));
   },
 
   seedInterests(topics: string[], whoLabels: string[] = []): void {
@@ -566,12 +570,16 @@ export const AlgoEngine = {
     const picked = new Set(readLocal<string[]>("nt_interests", []));
     const profile = interestProfile(pool, subs);
     const knowsUs = profile.topics.size > 0 || profile.deen !== "none";
+    // (a topic button tapped on purpose, e.g. كيمياء: the pool is just that topic, so it shows)
+    const chipTopic = pool.length > 0 && pool.every((v) => v.tp === pool[0].tp) ? pool[0].tp : null;
+    const studyOk = (tp: string) => !STUDY_TOPICS.has(tp) || pickedStudy(tp) || tp === chipTopic;
     const inInterest = (v: VideoItem) =>
-      !knowsUs ||
+      studyOk(v.tp) &&
+      (!knowsUs ||
       getVideoCategory(v) === "وعظ" ||
       profile.topics.has(v.tp) ||
       subs.has(v.c) ||
-      featureValue("c:" + v.c) > 0.8;
+      featureValue("c:" + v.c) > 0.8);
 
     const scored = candidates.map((v) => {
       const damp = CHANNEL_DAMP[v.c] || 0;
@@ -665,9 +673,10 @@ export const AlgoEngine = {
       }
       // (then: the same kind from outside their interests, then anything that keeps the channel limits,
       // and only when nothing at all is left, no limits, so the feed never stops)
-      if (pickIdx < 0) pickIdx = scored.findIndex((x) => x.cat === wantCat && fits(x, wantCat, 3));
-      if (pickIdx < 0) pickIdx = scored.findIndex((x) => fits(x, wantCat, 4));
-      if (pickIdx < 0) pickIdx = scored.findIndex((x) => fits(x, wantCat, 5));
+      const okStudy = (x: (typeof scored)[number]) => studyOk(x.v.tp);
+      if (pickIdx < 0) pickIdx = scored.findIndex((x) => okStudy(x) && x.cat === wantCat && fits(x, wantCat, 3));
+      if (pickIdx < 0) pickIdx = scored.findIndex((x) => okStudy(x) && fits(x, wantCat, 4));
+      if (pickIdx < 0) pickIdx = scored.findIndex((x) => okStudy(x) && fits(x, wantCat, 5));
       if (pickIdx < 0) break;
 
       const pick = scored.splice(pickIdx, 1)[0];
