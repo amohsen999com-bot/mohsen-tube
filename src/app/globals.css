@@ -1737,8 +1737,3 @@ body {
 .dock.mini.float.growing { box-shadow: 0 0 0 rgba(0, 0, 0, 0); border-radius: 14px; transition: box-shadow .38s ease, border-radius .38s ease; }
 @media (prefers-reduced-motion: reduce) { .expand-veil { animation: none; opacity: 0; } }
 .dock.over-veil { z-index: 41 !important; }
-
-/* وإنت بتصغّر الفيديو: البار اللي فوق (اللوجو والبحث والتبويبات) مستخبي، وبيظهر بهدوء بعد ما الشباك يوصل */
-body.mini-shrinking .top, body.mini-shrinking .chips-bar { opacity: 0 !important; pointer-events: none; }
-body.hdr-fadein .top, body.hdr-fadein .chips-bar { animation: hdrFadeIn .4s ease both; }
-@keyframes hdrFadeIn { from { opacity: 0; } to { opacity: 1; } }

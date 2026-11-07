@@ -9,7 +9,7 @@
  * - وهو واقف: صورة الفيديو بدل شاشة يوتيوب (زرار التشغيل الكبير واللوجو).
  * - لما ييجي من صفحة الفيديو (سحب لتحت) بيصغر من مكانه لحد الركن (FLIP).
  */
-import React, { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { Glyph } from "@/components/ui/Glyph";
 
 type Corner = "tl" | "tr" | "bl" | "br";
@@ -67,9 +67,8 @@ export function MiniFloat({
     el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
   }, [dockRef]);
 
-  // Arrive: from the watch page's video (shrinks into the corner), or just slide into the saved corner.
-  // (before the first paint, so the window never shows for a frame at the top corner)
-  useLayoutEffect(() => {
+  // Arrive: from the watch page's video (shrinks into the corner), or just slide into the saved corner
+  useEffect(() => {
     const el = dockRef.current;
     if (!el) return;
     corner.current = readCorner();

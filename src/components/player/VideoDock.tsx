@@ -735,28 +735,7 @@ export function VideoDock() {
    */
   const minimize = useCallback(() => {
     const el = dockRef.current;
-    if (el) {
-      const from = el.getBoundingClientRect();
-      miniHandoff.from = from;
-      // Pin it to the screen where it is: the page behind may scroll (back to where you were on the home page)
-      // before the floating window takes over, and the video must not ride along with it for a frame
-      const prev = { position: el.style.position, top: el.style.top, left: el.style.left };
-      el.style.position = "fixed";
-      el.style.top = from.top + "px";
-      el.style.left = from.left + "px";
-      window.setTimeout(() => {
-        if (!el.classList.contains("mini")) Object.assign(el.style, prev); // (navigation didn't happen: put it back)
-      }, 1500);
-    }
-    // The top bar stays hidden while the video shrinks, then fades in once the window has landed
-    const b = document.body;
-    b.classList.remove("hdr-fadein");
-    b.classList.add("mini-shrinking");
-    window.setTimeout(() => {
-      b.classList.remove("mini-shrinking");
-      b.classList.add("hdr-fadein");
-      window.setTimeout(() => b.classList.remove("hdr-fadein"), 450);
-    }, 430);
+    if (el) miniHandoff.from = el.getBoundingClientRect();
     const prev = prevPathRef.current;
     if (inAppNavs.current > 1 && prev && prev === lastBrowsePathRef.current) router.back();
     else router.push(lastBrowsePathRef.current || "/");
