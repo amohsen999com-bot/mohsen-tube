@@ -19,6 +19,9 @@ export const viewport: Viewport = {
   themeColor: "#19171b",
   width: "device-width",
   initialScale: 1,
+  // Like an app: the page stays at 100% (no accidental zoom-in from a tap or the floating window growing)
+  maximumScale: 1,
+  userScalable: false,
   // Use the whole screen, including beside the camera cutout: without this, phones with a punch-hole camera
   // letterbox fullscreen video away from the camera side, so one black bar ends up wider than the other.
   viewportFit: "cover",
