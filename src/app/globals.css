@@ -1603,3 +1603,38 @@ body {
   .owner-row .actions > .btn:hover, .owner-row .actions > .more-wrap > .btn:hover { background: transparent; }
   .owner-row .actions .btn:hover svg { fill: var(--text); }
 }
+
+/* ---------- السؤال السريع: لمسة مُرضية ----------
+   ١) الاختيار: الزرار يتملي دهبي بنبضة خفيفة وعلامة صح بتترسم، والباقي يهدى.
+   ٢) الشكر: علامة صح في دايرة بتترسم، والكلام يطلع بهدوء.
+   ٣) الاختفاء: الكارت يقفل لفوق بنعومة والصفحة تطلع مكانه من غير قفزة. */
+.ask-fold { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .5s cubic-bezier(.4, 0, .2, 1), opacity .4s ease, transform .5s cubic-bezier(.4, 0, .2, 1); }
+.ask-fold-in { min-height: 0; overflow: hidden; }
+.ask-fold.out { grid-template-rows: 0fr; opacity: 0; transform: scale(.97); }
+.ask-fold.out .ask { margin-top: 0; margin-bottom: 0; }
+
+.ask .ask-opts .ob-chip { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  transition: background .25s ease, border-color .25s ease, color .25s ease, opacity .3s ease, transform .2s cubic-bezier(.3, 1.6, .5, 1); }
+.ask .ask-opts .ob-chip:active:not(:disabled) { transform: scale(.95); }
+.ask .ask-opts .ob-chip:disabled { cursor: default; }
+.ask.picked .ask-opts .ob-chip:not(.chosen) { opacity: .35; }
+.ask .ask-opts .ob-chip.chosen { background: var(--gold); border-color: var(--gold); color: #1a1405; font-weight: 700; opacity: 1;
+  animation: askPop .45s cubic-bezier(.3, 1.6, .5, 1); box-shadow: 0 6px 18px -8px rgba(210, 159, 34, .8); }
+.ask-tick { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 22; stroke-dashoffset: 22; animation: askDraw .35s .1s ease-out forwards; }
+@keyframes askPop { 0% { transform: scale(.94); } 55% { transform: scale(1.05); } 100% { transform: scale(1); } }
+@keyframes askDraw { to { stroke-dashoffset: 0; } }
+
+.ask.done { display: flex; align-items: center; gap: 12px; text-align: start; color: var(--text); animation: askIn .4s cubic-bezier(.2, .8, .2, 1) both; }
+.ask.done b { display: block; color: var(--gold-soft); font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+.ask.done span { display: block; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+.ask-check { flex: none; width: 40px; height: 40px; fill: none; stroke: var(--gold); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.ask-check circle { stroke-dasharray: 145; stroke-dashoffset: 145; animation: askDraw .5s ease-out forwards; opacity: .55; }
+.ask-check path { stroke-dasharray: 34; stroke-dashoffset: 34; animation: askDraw .35s .4s ease-out forwards; stroke-width: 3.5; }
+@keyframes askIn { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+@media (max-width: 600px) { .ask.done { text-align: start; padding: 14px 16px; } }
+@media (prefers-reduced-motion: reduce) {
+  .ask-fold, .ask .ask-opts .ob-chip { transition: none; }
+  .ask .ask-opts .ob-chip.chosen, .ask.done { animation: none; }
+  .ask-tick, .ask-check circle, .ask-check path { animation: none; stroke-dashoffset: 0; }
+}

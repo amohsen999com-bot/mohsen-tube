@@ -27,6 +27,8 @@ const DUAS = [
   "ربنا يكرمك",
 ];
 
+type AskPhase = "ask" | "picked" | "thanks" | "leaving" | "gone";
+
 const AUDIENCE_OPTS = [
   "المبتدئ في الموضوع",
   "طالب العلم",
@@ -74,7 +76,10 @@ export default function WatchPage({
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [transcriptQuery, setTranscriptQuery] = useState("");
   const [roomModalCode, setRoomModalCode] = useState<string | null>(null);
-  const [askSubmitted, setAskSubmitted] = useState(false);
+  /** The quick question: ask → picked (your answer lights up) → thanks (check draws in) → leaving (folds away) → gone */
+  const [askPhase, setAskPhase] = useState<AskPhase>("ask");
+  const [askPick, setAskPick] = useState<string | null>(null);
+  const askTimers = useRef<number[]>([]);
   const [feedPool, setFeedPool] = useState<VideoItem[]>([]);
   const seriesListRef = useRef<HTMLOListElement | null>(null);
   const [, setStoreTick] = useState(0);
@@ -154,13 +159,25 @@ export default function WatchPage({
     setUpNext(detail.series?.nextVideo || relatedList[0] || null);
   }, [detail, relatedList, setUpNext]);
 
-  // Keep the series we're in as the context for the next episodes, and center the current episode
-  useEffect(() => {
-    if (detail?.series) rememberSeries(detail.series.id);
+  // Keep the series we're in as the context for the next episodes; the list starts closed and centers the current episode when opened
+  const centerSeries = () => {
     const list = seriesListRef.current;
     const on = list?.querySelector<HTMLLIElement>("li.on");
     if (list && on) list.scrollTop = on.offsetTop - list.offsetTop - list.clientHeight / 2 + on.clientHeight / 2;
+  };
+  useEffect(() => {
+    if (detail?.series) rememberSeries(detail.series.id);
+    centerSeries();
   }, [detail]);
+
+  // A new video asks again
+  useEffect(() => {
+    askTimers.current.forEach((t) => window.clearTimeout(t));
+    askTimers.current = [];
+    setAskPhase("ask");
+    setAskPick(null);
+  }, [detail?.video?.id]);
+  useEffect(() => () => askTimers.current.forEach((t) => window.clearTimeout(t)), []);
 
   // Attach global VideoDock to `#player` slot on mount, detach to mini-player on unmount
   useEffect(() => {
@@ -209,8 +226,15 @@ export default function WatchPage({
   };
 
   const handleSubmitAudienceAnswer = async (ans: string) => {
-    if (!detail?.video) return;
-    setAskSubmitted(true);
+    if (!detail?.video || askPhase !== "ask") return;
+    setAskPick(ans);
+    setAskPhase("picked");
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const at = (ms: number, phase: AskPhase) => askTimers.current.push(window.setTimeout(() => setAskPhase(phase), reduce ? 0 : ms));
+    at(520, "thanks");
+    at(3300, "leaving");
+    at(3800, "gone");
+    navigator.vibrate?.(12);
     try {
       await fetch("/api/label", {
         method: "POST",
@@ -468,37 +492,57 @@ export default function WatchPage({
           </div>
         )}
 
-        {/* Viewer Feedback Card (ask) */}
-        {!askSubmitted ? (
-          <div className="ask">
-            <div className="ask-head">
-              <small className="ask-eyebrow">سؤال سريع · ثانية واحدة</small>
-              <b>
-                <span className="ask-pre">سؤال سريع: </span>الفيديو ده مناسب أكتر لمين؟
-              </b>
+        {/* Viewer Feedback Card (ask): answer lights up, turns into a thank-you, then folds away */}
+        {askPhase !== "gone" && (
+          <div className={`ask-fold ${askPhase === "leaving" ? "out" : ""}`}>
+            <div className="ask-fold-in">
+              {askPhase === "ask" || askPhase === "picked" ? (
+                <div className={`ask ${askPhase === "picked" ? "picked" : ""}`}>
+                  <div className="ask-head">
+                    <small className="ask-eyebrow">سؤال سريع · ثانية واحدة</small>
+                    <b>
+                      <span className="ask-pre">سؤال سريع: </span>الفيديو ده مناسب أكتر لمين؟
+                    </b>
+                  </div>
+                  <div className="ob-chips ask-opts" style={{ marginTop: 8 }}>
+                    {AUDIENCE_OPTS.map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        className={`ob-chip ${askPick === opt ? "chosen" : ""}`}
+                        aria-pressed={askPick === opt}
+                        disabled={askPhase !== "ask"}
+                        onClick={() => handleSubmitAudienceAnswer(opt)}
+                      >
+                        {askPick === opt && (
+                          <svg className="ask-tick" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M5 12.5l4.2 4.2L19 7" />
+                          </svg>
+                        )}
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="ask done" role="status">
+                  <svg className="ask-check" viewBox="0 0 52 52" aria-hidden="true">
+                    <circle cx="26" cy="26" r="23" />
+                    <path d="M15 27l7.5 7.5L37 19" />
+                  </svg>
+                  <div>
+                    <b>جزاك الله خيرًا</b>
+                    <span>إجابتك هتساعد الفيديو ده يوصل للي محتاجه.</span>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="ob-chips ask-opts" style={{ marginTop: 8 }}>
-              {AUDIENCE_OPTS.map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  className="ob-chip"
-                  onClick={() => handleSubmitAudienceAnswer(opt)}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="ask done">
-            جزاك الله خيرًا. إجابتك هتساعد الفيديو ده يوصل للي محتاجه.
           </div>
         )}
 
         {/* Series Accordion */}
         {series && series.videos.length > 0 && (
-          <details className="series" open>
+          <details className="series" onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && centerSeries()}>
             <summary>
               {series.title} ({seriesDoneCount} من {series.videos.length} مكتمل)
             </summary>
