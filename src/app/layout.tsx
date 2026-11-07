@@ -5,9 +5,26 @@ import { Header } from "@/components/layout/Header";
 import { VideoDock } from "@/components/player/VideoDock";
 import { SignInGate } from "@/components/modals/SignInGate";
 
+const SITE = "https://mohsen-tube.vercel.app";
+
 export const metadata: Metadata = {
-  title: "محسن تيوب",
-  description: "فيديوهات نافعة: دروس، كورسات، واصنعها بنفسك",
+  metadataBase: new URL(SITE),
+  // Both names in the title, so a search for "محسن تيوب" or "Mohsen Tube" finds the site first
+  title: "محسن تيوب | Mohsen Tube",
+  description:
+    "محسن تيوب (Mohsen Tube): فيديوهات نافعة خالية من الشبهات والشهوات. دروس، كورسات، تعلّم مهارة، واصنعها بنفسك.",
+  applicationName: "محسن تيوب",
+  keywords: ["محسن تيوب", "Mohsen Tube", "mohsen tube", "محسن", "فيديوهات نافعة", "دروس", "كورسات"],
+  robots: { index: true, follow: true },
+  openGraph: {
+    type: "website",
+    siteName: "محسن تيوب | Mohsen Tube",
+    title: "محسن تيوب | Mohsen Tube",
+    description: "فيديوهات نافعة خالية من الشبهات والشهوات",
+    url: SITE,
+    locale: "ar_EG",
+    images: [{ url: "/icons/icon-512.png", width: 512, height: 512, alt: "محسن تيوب" }],
+  },
   manifest: "/manifest.webmanifest",
   icons: {
     icon: "/icons/icon-192.png",
@@ -44,6 +61,24 @@ export default function RootLayout({
         />
       </head>
       <body>
+        {/* Tells Google the site's name in Arabic and English (shown as the site name in results) */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebSite",
+              name: "محسن تيوب",
+              alternateName: ["Mohsen Tube", "mohsen tube", "محسن تيوب"],
+              url: SITE + "/",
+              potentialAction: {
+                "@type": "SearchAction",
+                target: SITE + "/search?q={search_term_string}",
+                "query-input": "required name=search_term_string",
+              },
+            }),
+          }}
+        />
         <PlayerProvider>
           {/* Nothing inside can make the page wider than the screen (iPhone would zoom out and push it sideways) */}
           <div className="page-clip">
