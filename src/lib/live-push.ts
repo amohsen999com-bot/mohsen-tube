@@ -2,7 +2,7 @@
  * الفيديوهات اللي يوتيوب بلّغنا بيها حالًا (إشعارات WebSub)، عشان تظهر على الموقع بعد دقايق من نزولها.
  *
  * يوتيوب بيبعت لـ /api/websub، واللي بيستقبل بيسجّل رقم الفيديو وقناته في Supabase (push_add).
- * هنا السيرفر بيقرا التنبيهات دي، ويتأكد من كل فيديو بنفسه من صفحة يوتيوب قبل ما يعرضه:
+ * هنا السيرفر بيقرا التنبيهات دي، ويتأكد من كل فيديو بنفسه من YouTube Data API الرسمي قبل ما يعرضه:
  * القناة لازم تكون من قنوات الموقع (ومش ممنوعة)، دقيقتين على الأقل (من غير Shorts)، مش بث جاي،
  * والعنوان عدّى قواعد الموقع. أي تنبيه مزيف أو فيديو ما عدّاش القواعد مش بيظهر.
  * بعد كده السحب الدوري والنشر اليومي بيدخّلوا نفس الفيديوهات في القاعدة عادي.
@@ -20,7 +20,6 @@ const enabled = () =>
 
 const TTL = 20_000;
 const MAX_TRIES = 3;
-const VERIFY_PER_LOAD = 6;
 
 type Hint = { id: string; ch: string; at: number };
 let hints: Hint[] = [];
@@ -61,98 +60,58 @@ export async function recordPush(id: string, chId: string): Promise<boolean> {
   }
 }
 
-/** What YouTube's own watch page says about a video (no API key needed). */
-export function parseWatchPage(html: string) {
-  const at = html.indexOf('"videoDetails":{');
-  if (at < 0) return null;
-  const d = html.slice(at, at + 6000);
-  const get = (r: RegExp) => (d.match(r) || [])[1];
-  let title = "";
-  try {
-    title = JSON.parse('"' + (get(/"title":"((?:[^"\\]|\\.)*)"/) || "") + '"');
-  } catch {}
-  const publish = (html.match(/"publishDate":"([^"]+)"/) || [])[1] || "";
-  return {
-    seconds: Number(get(/"lengthSeconds":"(\d+)"/) || 0),
-    channelId: get(/"channelId":"(UC[\w-]{22})"/) || "",
-    upcoming: /"isUpcoming":true/.test(d) || /"isLive":true/.test(d),
-    views: Number(get(/"viewCount":"(\d+)"/) || 0),
-    title,
-    publish,
-  };
-}
-
 const dayNum = (ms: number) => {
   const d = new Date(ms);
   return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
 };
 
-type Info = NonNullable<ReturnType<typeof parseWatchPage>>;
+type Info = { seconds: number; channelId: string; upcoming: boolean; views: number; title: string; publish: string };
 
-/** YouTube's own player data (same as the site's player asks for); works from servers more often than the page. */
-async function fromPlayer(id: string): Promise<Info | null> {
-  const res = await fetch("https://www.youtube.com/youtubei/v1/player?prettyPrint=false", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "User-Agent": "Mozilla/5.0" },
-    body: JSON.stringify({ context: { client: { clientName: "WEB", clientVersion: "2.20241101.00.00", hl: "ar", gl: "EG" } }, videoId: id }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(3500),
-  });
+/** ISO 8601 duration (PT1H2M3S) to seconds. */
+function isoSeconds(iso: string): number {
+  const m = /^P(?:(d+)D)?T?(?:(d+)H)?(?:(d+)M)?(?:(d+)S)?$/.exec(iso || "");
+  return m ? +(m[1] || 0) * 86400 + +(m[2] || 0) * 3600 + +(m[3] || 0) * 60 + +(m[4] || 0) : 0;
+}
+
+/**
+ * Video facts from the official YouTube Data API: one videos.list call (1 quota unit) for up to 50 videos.
+ * Needs YOUTUBE_API_KEY in the server settings; without it the alerts wait for the regular sync instead.
+ * Returns null when the call itself failed (try again later).
+ */
+export async function videoFacts(ids: string[]): Promise<Map<string, Info> | null> {
+  const key = process.env.YOUTUBE_API_KEY || "";
+  if (!key || !ids.length) return null;
+  const qs = new URLSearchParams({ part: "snippet,contentDetails,statistics", id: ids.slice(0, 50).join(","), key });
+  const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?${qs}`, { cache: "no-store", signal: AbortSignal.timeout(3500) });
   if (!res.ok) return null;
   const j = (await res.json()) as {
-    videoDetails?: { lengthSeconds?: string; channelId?: string; title?: string; isLive?: boolean; isUpcoming?: boolean; viewCount?: string };
-    microformat?: { playerMicroformatRenderer?: { publishDate?: string } };
+    items?: Array<{
+      id?: string;
+      snippet?: { channelId?: string; title?: string; publishedAt?: string; liveBroadcastContent?: string };
+      contentDetails?: { duration?: string };
+      statistics?: { viewCount?: string };
+    }>;
   };
-  const v = j.videoDetails;
-  if (!v?.channelId) return null;
-  return {
-    seconds: Number(v.lengthSeconds || 0),
-    channelId: v.channelId,
-    upcoming: !!(v.isLive || v.isUpcoming),
-    views: Number(v.viewCount || 0),
-    title: v.title || "",
-    publish: j.microformat?.playerMicroformatRenderer?.publishDate || "",
-  };
-}
-
-async function fromPage(id: string): Promise<Info | null> {
-  const res = await fetch(`https://www.youtube.com/watch?v=${id}&hl=ar&gl=EG`, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36",
-      "Accept-Language": "ar,en;q=0.8",
-      Cookie: "SOCS=CAI; CONSENT=YES+1",
-    },
-    cache: "no-store",
-    signal: AbortSignal.timeout(3500),
-  });
-  return res.ok ? parseWatchPage(await res.text()) : null;
-}
-
-/** Video facts from YouTube: player data first, the watch page if that fails. */
-export async function videoFacts(id: string): Promise<(Info & { via: string }) | null> {
-  for (const [via, get] of [["player", fromPlayer], ["page", fromPage]] as const) {
-    try {
-      const info = await get(id);
-      if (info?.channelId) return { ...info, via };
-    } catch {}
+  const out = new Map<string, Info>();
+  for (const v of j.items || []) {
+    if (!v.id || !v.snippet?.channelId) continue;
+    out.set(v.id, {
+      seconds: isoSeconds(v.contentDetails?.duration || ""),
+      channelId: v.snippet.channelId,
+      upcoming: !!v.snippet.liveBroadcastContent && v.snippet.liveBroadcastContent !== "none",
+      views: Number(v.statistics?.viewCount || 0),
+      title: v.snippet.title || "",
+      publish: v.snippet.publishedAt || "",
+    });
   }
-  return null;
+  return out;
 }
 
-async function verify(h: Hint): Promise<void> {
+function judge(h: Hint, info: Info | undefined): void {
   const ch = siteChannel(h.ch);
-  if (!ch) return void verified.set(h.id, null);
-  const info = await videoFacts(h.id);
-  if (!info || !info.channelId) {
-    // couldn't read it now; try again on a later request, then leave it to the regular sync
-    const n = (tries.get(h.id) || 0) + 1;
-    tries.set(h.id, n);
-    if (n >= MAX_TRIES) verified.set(h.id, null);
-    return;
-  }
   const ok =
-    info.channelId === h.ch && !info.upcoming && info.seconds >= MIN_SECONDS && titleAllowed(info.title, ch.grp);
-  if (!ok) return void verified.set(h.id, null);
+    !!ch && !!info && info.channelId === h.ch && !info.upcoming && info.seconds >= MIN_SECONDS && titleAllowed(info.title, ch.grp);
+  if (!ok || !ch || !info) return void verified.set(h.id, null);
   const published = Date.parse(info.publish);
   verified.set(h.id, {
     id: h.id,
@@ -167,7 +126,7 @@ async function verify(h: Hint): Promise<void> {
   });
 }
 
-/** Refresh the alerts (at most every 20s) and check a few new ones. Never throws, waits a few seconds at most. */
+/** Refresh the alerts (at most every 20s) and check the new ones in one API call. Never throws, waits a few seconds at most. */
 export async function loadLivePush(): Promise<void> {
   if (!enabled() || Date.now() - loadedAt < TTL) return;
   inflight ||= (async () => {
@@ -176,8 +135,24 @@ export async function loadLivePush(): Promise<void> {
       const keep = new Set(hints.map((h) => h.id));
       for (const id of verified.keys()) if (!keep.has(id)) verified.delete(id);
       for (const id of tries.keys()) if (!keep.has(id)) tries.delete(id);
-      const todo = hints.filter((h) => !verified.has(h.id)).slice(0, VERIFY_PER_LOAD);
-      await Promise.all(todo.map((h) => verify(h).catch(() => {})));
+      const todo: Hint[] = [];
+      for (const h of hints) {
+        if (verified.has(h.id)) continue;
+        if (!siteChannel(h.ch)) verified.set(h.id, null); // not ours (or blocked): never shown, no API call
+        else if (todo.length < 50) todo.push(h);
+      }
+      if (todo.length && process.env.YOUTUBE_API_KEY) {
+        const facts = await videoFacts(todo.map((h) => h.id)).catch(() => null);
+        for (const h of todo) {
+          if (facts) judge(h, facts.get(h.id));
+          else {
+            // the call failed; try again on a later request, then leave it to the regular sync
+            const n = (tries.get(h.id) || 0) + 1;
+            tries.set(h.id, n);
+            if (n >= MAX_TRIES) verified.set(h.id, null);
+          }
+        }
+      }
     } catch {}
     loadedAt = Date.now();
   })().finally(() => (inflight = null));

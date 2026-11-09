@@ -4,7 +4,7 @@
  * POST: يوتيوب بيبلّغ بفيديو جديد (Atom XML) → بنسجّل رقمه وقناته، والسيرفر بيتأكد منه قبل ما يعرضه.
  * الاشتراكات بتتجدد كل يوم من GitHub Actions (scripts/websub-subscribe.ts).
  */
-import { recordPush, siteChannel, videoFacts } from "../../../lib/live-push.ts";
+import { recordPush, siteChannel } from "../../../lib/live-push.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -12,12 +12,6 @@ const TOPIC = /^https:\/\/www\.youtube\.com\/xml\/feeds\/videos\.xml\?channel_id
 
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
-  // TEMP probe (remove after checking): can this server read YouTube's video facts?
-  const probe = p.get("probe") || "";
-  if (/^[A-Za-z0-9_-]{11}$/.test(probe)) {
-    const f = await videoFacts(probe);
-    return Response.json(f ? { via: f.via, seconds: f.seconds, channelId: f.channelId } : { via: null });
-  }
   const mode = p.get("hub.mode");
   const challenge = p.get("hub.challenge") || "";
   const ch = (p.get("hub.topic") || "").match(TOPIC)?.[1];
