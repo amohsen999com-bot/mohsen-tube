@@ -185,19 +185,30 @@ const writeSession = (s: AuthSession | null) => {
   else window.localStorage.removeItem(SESSION_KEY);
 };
 
-function decodeJwt(token: string): { sub?: string; email?: string } {
+function decodeJwt(token: string): { sub?: string; email?: string; user_metadata?: Record<string, unknown> } {
   try {
     const part = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(atob(part));
+    // UTF-8 aware, so Arabic names in the token come out right
+    const bin = atob(part);
+    return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
   } catch {
     return {};
   }
 }
 
-export function currentUser(): { email: string } | null {
+export function currentUser(): { email: string; name?: string; avatar?: string } | null {
   if (!hasWindow()) return null;
   const s = readSession();
-  return s ? { email: s.email } : null;
+  if (!s) return null;
+  // Google sign-ins carry the person's name and photo in the token (Supabase user_metadata)
+  let meta: Record<string, unknown> = {};
+  meta = decodeJwt(s.access_token).user_metadata || {};
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+  return {
+    email: s.email,
+    name: str(meta.full_name) || str(meta.name),
+    avatar: str(meta.avatar_url) || str(meta.picture),
+  };
 }
 
 export function lastSyncedAt(): number {
