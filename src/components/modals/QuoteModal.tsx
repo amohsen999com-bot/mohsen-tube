@@ -70,28 +70,47 @@ export function QuoteModal({
       lines.forEach((l, i) => c.fillText(l, W / 2, top + i * size * 1.7));
 
       c.fillStyle = "#e8c468";
-      c.font = "500 34px 'Noto Sans Arabic', sans-serif";
-      c.fillText(`— ${video.c}`, W / 2, 880);
+      // Channel name, shrunk to stay inside the frame when it's long
+      let chSize = 34;
+      do {
+        c.font = `500 ${chSize}px 'Noto Sans Arabic', sans-serif`;
+      } while (c.measureText(`— ${video.c}`).width > W - 240 && (chSize -= 2) > 20);
+      c.fillText(`— ${video.c}`, W / 2, 872);
 
-      // Mohsen Tube emblem
-      c.fillStyle = "#5d0018";
+      // Mohsen Tube signature: the site's logo mark + "محسن" (cream) "تيوب" (gold), centred as one group
+      const LOGO = 58;
+      const GAP = 14;
+      const SPACE = 11;
+      const midY = 962;
+      c.save();
+      c.direction = "ltr";
+      c.textAlign = "left";
+      c.textBaseline = "middle";
+      c.font = "800 42px 'Cairo', 'Noto Sans Arabic', sans-serif";
+      const wM = c.measureText("محسن").width;
+      const wT = c.measureText("تيوب").width;
+      const total = wT + SPACE + wM + GAP + LOGO;
+      const x0 = W / 2 - total / 2;
+      // RTL reading order: logo on the right, then محسن, then تيوب on the left
+      c.fillStyle = "#e2b54a";
+      c.fillText("تيوب", x0, midY + 3);
+      c.fillStyle = "#f4efe4";
+      c.fillText("محسن", x0 + wT + SPACE, midY + 3);
+      // Logo mark (same drawing as LogoMark.tsx, a 48-unit box scaled to LOGO px)
+      c.translate(x0 + wT + SPACE + wM + GAP, midY - LOGO / 2);
+      c.scale(LOGO / 48, LOGO / 48);
+      c.fillStyle = "#4f0c1f";
       c.beginPath();
-      c.arc(W / 2 + 92, 960, 22, 0, Math.PI * 2);
+      c.roundRect(2, 2, 44, 44, 13);
       c.fill();
-      c.strokeStyle = "#d29f22";
-      c.lineWidth = 2;
+      c.strokeStyle = "rgba(214, 176, 98, .35)";
+      c.lineWidth = 0.8;
+      c.beginPath();
+      c.roundRect(4.5, 4.5, 39, 39, 10.5);
       c.stroke();
-
-      c.fillStyle = "#d29f22";
-      c.beginPath();
-      c.moveTo(W / 2 + 85, 950);
-      c.lineTo(W / 2 + 85, 970);
-      c.lineTo(W / 2 + 102, 960);
-      c.fill();
-
-      c.font = "700 30px 'Noto Sans Arabic', sans-serif";
-      c.fillStyle = "#f2ede2";
-      c.fillText("محسن تيوب", W / 2 - 10, 971);
+      c.fillStyle = "#d6b062";
+      c.fill(new Path2D("M19.5 17.6v12.8c0 1 1.1 1.6 1.9 1.1l10-6.4c.8-.5.8-1.7 0-2.2l-10-6.4c-.8-.5-1.9.1-1.9 1.1z"));
+      c.restore();
     },
     [video.c]
   );
