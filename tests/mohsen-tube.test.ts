@@ -464,6 +464,28 @@ describe("Hourly new-video sync rules", () => {
   });
 });
 
+describe("Quick questions under the video", () => {
+  it("asks what's missing first, varies otherwise, and every shown answer is accepted by the server", async () => {
+    const { QUESTIONS, pickQuestion, PERSONA_TO_AUD } = await import("../src/lib/client/questions.ts");
+    const { LABEL_ANSWERS } = await import("../src/lib/db.ts");
+    const v = { id: "abcdefghijk", t: "x", c: "قناة", d: 900, tp: "فقه", g: "علماء" } as never;
+    const empty = { v: {}, c: {} };
+    assert.equal(pickQuestion(v, empty, 0)?.key, "aud", "a video nobody described yet: who is it for");
+    assert.equal(pickQuestion(v, empty, 5)?.key, "persona", "after a few videos: who you are (once)");
+    const full = {
+      v: { abcdefghijk: { aud: { "أي حد": 3 }, level: { "متقدم": 3 } } },
+      c: { "قناة": { trait: { "هادي": 3 }, edge: { "دليل وتأصيل": 3 } } },
+    };
+    const k = pickQuestion(v, full, 0)?.key;
+    assert.ok(k && ["gain", "aud", "more", "level"].includes(k), "everything known: a rotating question");
+    for (const q of Object.values(QUESTIONS)) {
+      if (q.scope === "me") continue;
+      for (const o of q.options) assert.ok(LABEL_ANSWERS[q.key as keyof typeof LABEL_ANSWERS].has(o), q.key + ": " + o);
+    }
+    for (const aud of Object.values(PERSONA_TO_AUD)) assert.ok(LABEL_ANSWERS.aud.has(aud), "persona maps to a real audience: " + aud);
+  });
+});
+
 describe("YouTube instant alerts (WebSub)", () => {
   it("only accepts the site's channels on the callback, and needs the official API key to check videos", async () => {
     const { siteChannel, videoFacts } = await import("../src/lib/live-push.ts");

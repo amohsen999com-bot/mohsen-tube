@@ -99,11 +99,11 @@ export async function updateRoom(input: { code: string; token: string; vid: stri
 }
 
 // ---------- Viewer labels ----------
-const VIDEO_QUESTIONS = new Set(["aud"]);
+const VIDEO_QUESTIONS = new Set(["aud", "level", "gain"]);
 
 export async function saveViewerLabel(input: { vid: string; q: string; a: string[]; voter?: string }): Promise<boolean> {
   if (!useSupabase()) return sqliteSaveLabel(input);
-  if (!["aud", "trait", "edge", "similar"].includes(input.q)) return false;
+  if (!["aud", "level", "gain", "trait", "edge", "similar"].includes(input.q)) return false;
   if (!/^[A-Za-z0-9_-]{6,16}$/.test(input.vid)) return false;
   const db = getDb();
   const video = db.prepare(`SELECT c FROM videos WHERE id = ?`).get(input.vid) as { c: string } | undefined;
@@ -119,7 +119,7 @@ export async function saveViewerLabel(input: { vid: string; q: string; a: string
     );
     answers = raw.filter((x) => known.has(x) && x !== ch);
   } else {
-    const allowed = LABEL_ANSWERS[input.q as "aud" | "trait" | "edge"];
+    const allowed = LABEL_ANSWERS[input.q as keyof typeof LABEL_ANSWERS];
     answers = raw.filter((x) => allowed.has(x));
   }
   if (!answers.length) return false;
@@ -145,7 +145,7 @@ export async function getAggregatedLabels(): Promise<LabelsAggregate> {
   try {
     const rows = (await rpc<Array<{ vid: string; ch: string; q: string; answer: string; n: number }>>("labels_totals", {})) || [];
     for (const r of rows) {
-      if (r.q !== "similar" && !LABEL_ANSWERS[r.q as "aud" | "trait" | "edge"]?.has(r.answer)) continue;
+      if (r.q !== "similar" && !LABEL_ANSWERS[r.q as keyof typeof LABEL_ANSWERS]?.has(r.answer)) continue;
       const isVideoQ = VIDEO_QUESTIONS.has(r.q);
       const key = isVideoQ ? r.vid : r.ch;
       if (!key) continue;
@@ -158,4 +158,19 @@ export async function getAggregatedLabels(): Promise<LabelsAggregate> {
   }
   labelsCache = { at: Date.now(), data: out };
   return out;
+}
+
+// ---------- Viewer feedback on the feed pages ("مبسوط؟ فيه عيب؟") ----------
+/** Stores what a viewer said about "مقترح لك" / "ترفيه" (chips + their own words) for the site owner to read. */
+export async function saveFeedback(input: { page: string; picks: string[]; body: string; voter: string }): Promise<boolean> {
+  if (input.page !== "home" && input.page !== "fun") return false;
+  const picks = [...new Set(input.picks.map((x) => String(x).trim().slice(0, 60)))].filter(Boolean).slice(0, 8);
+  const body = String(input.body || "").trim().slice(0, 600);
+  if (!picks.length && !body) return false;
+  if (!useSupabase()) return true; // local runs: nothing to keep
+  try {
+    return !!(await rpc<boolean>("feedback_add", { p_page: input.page, p_picks: picks, p_body: body, p_voter: input.voter }));
+  } catch {
+    return false;
+  }
 }

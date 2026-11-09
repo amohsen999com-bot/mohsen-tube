@@ -1816,3 +1816,17 @@ h2.you-h { cursor: default; }
   .you-pills { max-width: none; }
   .you-stack { width: 132px; }
 }
+
+/* ===== Feed check-in ("مبسوط باللي بيظهرلك؟") inside مقترح لك / ترفيه ===== */
+.checkin { grid-column: 1 / -1; min-width: 0; }
+.checkin .ask { margin: 4px 0; }
+.checkin-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.checkin-x { flex: none; background: none; border: 0; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; padding: 2px 0; }
+.checkin-x:hover { color: var(--text); }
+.checkin-opts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; }
+.checkin-opts .ob-chip { font-size: 14px; padding: 8px 14px; }
+.checkin-opts .ob-chip.chosen { background: var(--gold); border-color: var(--gold); color: var(--bg); font-weight: 500; }
+.checkin-text { display: block; width: 100%; box-sizing: border-box; margin-top: 12px; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; font-size: 15px; resize: vertical; min-height: 56px; }
+.checkin-text:focus { outline: none; border-color: var(--gold); }
+.checkin-send { margin-top: 10px; }

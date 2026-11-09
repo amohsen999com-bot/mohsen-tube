@@ -5,6 +5,7 @@ import { VideoItem } from "@/lib/types";
 import { VideoCard } from "@/components/video/VideoCard";
 import { buildFunLayout, FunLayout, funVisitSeed } from "@/lib/client/fun";
 import { PageSkeleton } from "@/components/ui/Skeleton";
+import { FeedCheckIn } from "@/components/home/FeedCheckIn";
 
 const MIX_PAGE = 24;
 
@@ -113,6 +114,8 @@ export default function FunPage() {
           </div>
         </section>
       )}
+
+      <FeedCheckIn page="fun" />
 
       {layout.shelves.map((s) => (
         <Shelf key={s.key} label={s.title} videos={s.videos} onHidden={hide} />

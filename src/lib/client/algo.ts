@@ -4,6 +4,7 @@ import type { LabelsAggregate, VideoItem } from "../types.ts";
 import { normArabic } from "../arabic.ts";
 import { ClientStore, readLocal, writeLocal } from "./store.ts";
 import { Growth, type GrowthContext } from "./growth.ts";
+import { PERSONA_TO_AUD } from "./questions.ts";
 
 const HALF_LIFE = 4 * 86400_000; // 4 days
 const MAX_KEYS = 4000;
@@ -289,6 +290,55 @@ function topAnswers(map?: Record<string, number>): string[] {
     .map(([a]) => a);
 }
 
+const NO_GAIN = "ما استفدتش كتير";
+
+/**
+ * What the viewer told us about the feed itself ("فيه تكرار"، "عايز أقصر"…), kept on this device.
+ * variety: less pull toward what you already watch (more new things); dur: + longer / - shorter;
+ * faith: more religious lessons. Each answer moves one notch, capped, and fades back over ~3 weeks.
+ */
+type Tune = { variety: number; dur: number; faith: number; at: number };
+function getTune(): Tune {
+  const t = { variety: 0, dur: 0, faith: 0, at: 0, ...readLocal<Partial<Tune>>("nt_tune", {}) };
+  const fade = Math.max(0, 1 - (Date.now() - t.at) / (21 * 86400_000));
+  return { variety: t.variety * fade, dur: t.dur * fade, faith: t.faith * fade, at: t.at };
+}
+function applyTune(v: VideoItem, a: number): number {
+  const t = getTune();
+  if (!t.at) return a;
+  let out = a * (1 - 0.12 * Math.min(3, t.variety));
+  const b = durBucket(v.d || 0);
+  if (t.dur > 0) out += (b === "l" || b === "x" ? 0.25 : b === "s" ? -0.15 : 0) * Math.min(2, t.dur);
+  if (t.dur < 0) out += (b === "s" ? 0.25 : b === "x" ? -0.2 : 0) * Math.min(2, -t.dur);
+  if (t.faith > 0 && getVideoCategory(v) === "وعظ") out += 0.3 * Math.min(2, t.faith);
+  return out;
+}
+
+/** The feed check-in answers that change something (the rest are just kept for the site owner). */
+export const FEED_TUNES: Record<string, Partial<Record<"variety" | "dur" | "faith", number>>> = {
+  "فيه تكرار كتير": { variety: 1 },
+  "بعيد عن اهتماماتي": { variety: 1 },
+  "عايز أنواع تانية": { variety: 1 },
+  "عايز فيديوهات أقصر": { dur: -1 },
+  "عايز فيديوهات أطول": { dur: 1 },
+  "عايز علم شرعي أكتر": { faith: 1 },
+};
+
+/**
+ * What you told us about yourself ("إنت أقرب لأنهي واحد؟", kept on this device only) turned into a pull
+ * toward videos people said help someone like you, and toward the right level. "أي حد" is a small pull
+ * for everyone, so videos that suit anyone are a safe start for new visitors.
+ */
+function personaPriors(): Record<string, number> {
+  const p: Record<string, number> = { "a:أي حد": 0.4 };
+  const persona = readLocal<string>("nt_persona", "");
+  const aud = PERSONA_TO_AUD[persona];
+  if (aud) p["a:" + aud] = 1.2;
+  if (persona === "لسه ببدأ أتعلم") p["l:سهل لأي حد"] = 0.8;
+  if (persona === "متخصص في مجالي" || persona === "طالب علم") p["l:متقدم"] = 0.6;
+  return p;
+}
+
 const durBucket = (d: number) =>
   d < 600 ? "s" : d < 1800 ? "m" : d < 3600 ? "l" : "x";
 
@@ -305,6 +355,9 @@ export function extractFeatures(v: VideoItem): Array<[string, number]> {
     ...topAnswers(labelsCache.c[v.c]?.edge),
   ].slice(0, 4);
   const aud = topAnswers(labelsCache.v[v.id]?.aud).slice(0, 2);
+  // What people got from it (information, a reminder, a skill, deeper understanding) and how hard it is
+  const gain = topAnswers(labelsCache.v[v.id]?.gain).filter((x) => x !== NO_GAIN).slice(0, 2);
+  const level = topAnswers(labelsCache.v[v.id]?.level)[0];
 
   return [
     ["c:" + v.c, 1],
@@ -316,6 +369,8 @@ export function extractFeatures(v: VideoItem): Array<[string, number]> {
     ),
     ...style.map((x): [string, number] => ["s:" + x, 0.3]),
     ...aud.map((x): [string, number] => ["a:" + x, 0.35]),
+    ...gain.map((x): [string, number] => ["s:" + x, 0.3]),
+    ...(level ? [["l:" + level, 0.35] as [string, number]] : []),
   ];
 }
 
@@ -345,7 +400,7 @@ export function getSessionAffinity(v: VideoItem): number {
 
 export function getVideoAffinity(v: VideoItem): number {
   const s = slotPrefix();
-  const priors = readLocal<Record<string, number>>("nt_prior", {});
+  const priors = { ...readLocal<Record<string, number>>("nt_prior", {}), ...personaPriors() };
   let a = 0;
   for (const [k, w] of extractFeatures(v)) {
     a +=
@@ -359,6 +414,11 @@ export function getVideoAffinity(v: VideoItem): number {
   if (sims.length) {
     a += 0.35 * Math.max(...sims.map((c) => Math.tanh(featureValue("c:" + c) / 2)));
   }
+  // Most people said they didn't get much from it: it goes down for everyone
+  const g = labelsCache.v[v.id]?.gain;
+  const gv = Object.values(g || {}).reduce((x, y) => x + y, 0);
+  if (gv >= 3 && (g?.[NO_GAIN] || 0) / gv >= 0.4) a -= 0.6;
+  a = applyTune(v, a);
   // The mood nudges; it doesn't take over the screen
   return a + 0.6 * getSessionAffinity(v);
 }
@@ -486,6 +546,10 @@ export const AlgoEngine = {
     if (labels) labelsCache = labels;
   },
 
+  labels(): LabelsAggregate {
+    return labelsCache;
+  },
+
   cat: getVideoCategory,
 
   topicScore(tp: string): number {
@@ -555,6 +619,26 @@ export const AlgoEngine = {
       learnFromVideo(v, -0.7);
       Growth.quit(v);
     }
+  },
+
+  /** The feed check-in ("مبسوط باللي بيظهرلك؟"): turn the picked answers into notches on this device */
+  applyFeedback(picks: string[]): void {
+    const t = getTune();
+    const next = { variety: t.variety, dur: t.dur, faith: t.faith, at: Date.now() };
+    for (const p of picks) {
+      const d = FEED_TUNES[p];
+      if (!d) continue;
+      next.variety = Math.min(3, next.variety + (d.variety || 0));
+      next.dur = Math.max(-2, Math.min(2, next.dur + (d.dur || 0)));
+      next.faith = Math.min(2, next.faith + (d.faith || 0));
+    }
+    writeLocal("nt_tune", next);
+  },
+
+  /** "عايز فيديوهات زي دي أكتر؟": the clearest taste signal there is */
+  recordMore(v: VideoItem, answer: string): void {
+    const reward = answer === "أيوه كتير" ? 1.0 : answer === "أحيانًا" ? 0.3 : -0.7;
+    learnFromVideo(v, reward);
   },
 
   recordLike(v: VideoItem, liked: boolean): void {

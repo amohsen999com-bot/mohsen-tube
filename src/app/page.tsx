@@ -6,6 +6,7 @@ import { VideoItem } from "@/lib/types";
 import { HeroBanner } from "@/components/home/HeroBanner";
 import { VideoCard } from "@/components/video/VideoCard";
 import { OnboardingModal } from "@/components/modals/OnboardingModal";
+import { FeedCheckIn } from "@/components/home/FeedCheckIn";
 import { AlgoEngine } from "@/lib/client/algo";
 import { ClientStore, readLocal, subscribeStore } from "@/lib/client/store";
 import { getDayKey, getWird, getWirdStreak } from "@/lib/client/prayer";
@@ -400,15 +401,18 @@ export default function HomePage() {
       </div>
 
       <div className="grid" id="feed" ref={feedRef}>
-        {gridVideos.map((v) => (
-          <VideoCard
-            key={v.id}
-            video={v}
-            showWhy
-            onHidden={(id) =>
-              setDisplayedFeed((prev) => prev.filter((x) => x.id !== id))
-            }
-          />
+        {gridVideos.map((v, i) => (
+          <React.Fragment key={v.id}>
+            <VideoCard
+              video={v}
+              showWhy
+              onHidden={(id) =>
+                setDisplayedFeed((prev) => prev.filter((x) => x.id !== id))
+              }
+            />
+            {/* "مبسوط باللي بيظهرلك؟" after the first dozen cards */}
+            {i === 11 && <FeedCheckIn page="home" />}
+          </React.Fragment>
         ))}
       </div>
 

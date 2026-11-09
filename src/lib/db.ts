@@ -866,6 +866,8 @@ export function getChannelPageData(channelName: string) {
 
 const VALID_QUESTIONS: Record<string, "video" | "channel"> = {
   aud: "video",
+  level: "video",
+  gain: "video",
   trait: "channel",
   edge: "channel",
   similar: "channel",
@@ -875,10 +877,12 @@ const VALID_QUESTIONS: Record<string, "video" | "channel"> = {
  * The only answers each question accepts (the same chips the viewer is shown).
  * "similar" answers must be real channel names from the catalog (checked against the DB).
  */
-export const LABEL_ANSWERS: Record<"aud" | "trait" | "edge", ReadonlySet<string>> = {
+export const LABEL_ANSWERS: Record<"aud" | "level" | "gain" | "trait" | "edge", ReadonlySet<string>> = {
   aud: new Set([
     "أي حد", "المبتدئ في الموضوع", "طالب العلم", "الشباب", "الآباء والأمهات", "المتخصص", "الأطفال", "المتزوجين",
   ]),
+  level: new Set(["سهل لأي حد", "محتاج خلفية بسيطة", "متقدم"]),
+  gain: new Set(["معلومة جديدة", "تذكرة للقلب", "مهارة هطبقها", "فهم أعمق", "ما استفدتش كتير"]),
   trait: new Set(["هادي", "حماسي", "مبسّط", "عميق", "عملي"]),
   edge: new Set([
     "بيبسّط الصعب", "أمثلة من الواقع", "دليل وتأصيل", "بيحرّك القلب", "بيجاوب على أسئلة الناس",
@@ -921,7 +925,7 @@ export function saveViewerLabel(input: {
     );
     answers = raw.filter((x) => known.has(x) && x !== ch);
   } else {
-    const allowed = LABEL_ANSWERS[input.q as "aud" | "trait" | "edge"];
+    const allowed = LABEL_ANSWERS[input.q as keyof typeof LABEL_ANSWERS];
     answers = raw.filter((x) => allowed.has(x));
   }
   if (!answers.length) return false;

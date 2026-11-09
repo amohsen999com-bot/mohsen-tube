@@ -15,6 +15,7 @@ import { ClipEditor } from "@/components/video/ClipEditor";
 import { QuoteModal } from "@/components/modals/QuoteModal";
 import { ClientStore, subscribeStore } from "@/lib/client/store";
 import { AlgoEngine } from "@/lib/client/algo";
+import { pickQuestion, rememberAnswer, type Question } from "@/lib/client/questions";
 import { activeSeries, composeRelated, loadFeedPool, rememberSeries } from "@/lib/client/related";
 import { PageSkeleton } from "@/components/ui/Skeleton";
 
@@ -29,14 +30,6 @@ const DUAS = [
 
 type AskPhase = "ask" | "picked" | "thanks" | "leaving" | "gone";
 
-const AUDIENCE_OPTS = [
-  "المبتدئ في الموضوع",
-  "طالب العلم",
-  "الشباب",
-  "المتزوجين",
-  "الآباء والأمهات",
-  "المتخصص",
-];
 
 export default function WatchPage({
   params,
@@ -79,6 +72,8 @@ export default function WatchPage({
   /** The quick question: ask → picked (your answer lights up) → thanks (check draws in) → leaving (folds away) → gone */
   const [askPhase, setAskPhase] = useState<AskPhase>("ask");
   const [askPick, setAskPick] = useState<string | null>(null);
+  /** Which quick question this video gets (one per video, the most useful one; null = already answered) */
+  const [question, setQuestion] = useState<Question | null>(null);
   const askTimers = useRef<number[]>([]);
   const [feedPool, setFeedPool] = useState<VideoItem[]>([]);
   const seriesListRef = useRef<HTMLOListElement | null>(null);
@@ -176,6 +171,7 @@ export default function WatchPage({
     askTimers.current = [];
     setAskPhase("ask");
     setAskPick(null);
+    setQuestion(detail?.video ? pickQuestion(detail.video, AlgoEngine.labels(), ClientStore.getList("history").length) : null);
   }, [detail?.video?.id]);
   useEffect(() => () => askTimers.current.forEach((t) => window.clearTimeout(t)), []);
 
@@ -226,7 +222,8 @@ export default function WatchPage({
   };
 
   const handleSubmitAudienceAnswer = async (ans: string) => {
-    if (!detail?.video || askPhase !== "ask") return;
+    if (!detail?.video || !question || askPhase !== "ask") return;
+    rememberAnswer(detail.video, question, ans);
     setAskPick(ans);
     setAskPhase("picked");
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -235,6 +232,11 @@ export default function WatchPage({
     at(3300, "leaving");
     at(3800, "gone");
     navigator.vibrate?.(12);
+    // Questions about you stay on this device and teach your feed directly
+    if (question.scope === "me") {
+      if (question.key === "more") AlgoEngine.recordMore(detail.video, ans);
+      return;
+    }
     try {
       await fetch("/api/label", {
         method: "POST",
@@ -242,7 +244,7 @@ export default function WatchPage({
         body: JSON.stringify({
           vid: detail.video.id,
           ch: detail.video.c,
-          q: "aud",
+          q: question.key,
           a: [ans],
         }),
       });
@@ -493,7 +495,7 @@ export default function WatchPage({
         )}
 
         {/* Viewer Feedback Card (ask): answer lights up, turns into a thank-you, then folds away */}
-        {askPhase !== "gone" && (
+        {question && askPhase !== "gone" && (
           <div className={`ask-fold ${askPhase === "leaving" ? "out" : ""}`}>
             <div className="ask-fold-in">
               {askPhase === "ask" || askPhase === "picked" ? (
@@ -501,11 +503,11 @@ export default function WatchPage({
                   <div className="ask-head">
                     <small className="ask-eyebrow">سؤال سريع · ثانية واحدة</small>
                     <b>
-                      <span className="ask-pre">سؤال سريع: </span>الفيديو ده مناسب أكتر لمين؟
+                      <span className="ask-pre">سؤال سريع: </span>{question.text}
                     </b>
                   </div>
                   <div className="ob-chips ask-opts" style={{ marginTop: 8 }}>
-                    {AUDIENCE_OPTS.map((opt) => (
+                    {question.options.map((opt) => (
                       <button
                         key={opt}
                         type="button"
@@ -532,7 +534,7 @@ export default function WatchPage({
                   </svg>
                   <div>
                     <b>جزاك الله خيرًا</b>
-                    <span>إجابتك هتساعد الفيديو ده يوصل للي محتاجه.</span>
+                    <span>{question.thanks}</span>
                   </div>
                 </div>
               )}
