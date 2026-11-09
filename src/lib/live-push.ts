@@ -87,21 +87,62 @@ const dayNum = (ms: number) => {
   return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
 };
 
+type Info = NonNullable<ReturnType<typeof parseWatchPage>>;
+
+/** YouTube's own player data (same as the site's player asks for); works from servers more often than the page. */
+async function fromPlayer(id: string): Promise<Info | null> {
+  const res = await fetch("https://www.youtube.com/youtubei/v1/player?prettyPrint=false", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "User-Agent": "Mozilla/5.0" },
+    body: JSON.stringify({ context: { client: { clientName: "WEB", clientVersion: "2.20241101.00.00", hl: "ar", gl: "EG" } }, videoId: id }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(3500),
+  });
+  if (!res.ok) return null;
+  const j = (await res.json()) as {
+    videoDetails?: { lengthSeconds?: string; channelId?: string; title?: string; isLive?: boolean; isUpcoming?: boolean; viewCount?: string };
+    microformat?: { playerMicroformatRenderer?: { publishDate?: string } };
+  };
+  const v = j.videoDetails;
+  if (!v?.channelId) return null;
+  return {
+    seconds: Number(v.lengthSeconds || 0),
+    channelId: v.channelId,
+    upcoming: !!(v.isLive || v.isUpcoming),
+    views: Number(v.viewCount || 0),
+    title: v.title || "",
+    publish: j.microformat?.playerMicroformatRenderer?.publishDate || "",
+  };
+}
+
+async function fromPage(id: string): Promise<Info | null> {
+  const res = await fetch(`https://www.youtube.com/watch?v=${id}&hl=ar&gl=EG`, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36",
+      "Accept-Language": "ar,en;q=0.8",
+      Cookie: "SOCS=CAI; CONSENT=YES+1",
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(3500),
+  });
+  return res.ok ? parseWatchPage(await res.text()) : null;
+}
+
+/** Video facts from YouTube: player data first, the watch page if that fails. */
+export async function videoFacts(id: string): Promise<(Info & { via: string }) | null> {
+  for (const [via, get] of [["player", fromPlayer], ["page", fromPage]] as const) {
+    try {
+      const info = await get(id);
+      if (info?.channelId) return { ...info, via };
+    } catch {}
+  }
+  return null;
+}
+
 async function verify(h: Hint): Promise<void> {
   const ch = siteChannel(h.ch);
   if (!ch) return void verified.set(h.id, null);
-  let info: ReturnType<typeof parseWatchPage> = null;
-  try {
-    const res = await fetch(`https://www.youtube.com/watch?v=${h.id}&hl=ar&gl=EG`, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36",
-        "Accept-Language": "ar,en;q=0.8",
-      },
-      cache: "no-store",
-      signal: AbortSignal.timeout(3500),
-    });
-    if (res.ok) info = parseWatchPage(await res.text());
-  } catch {}
+  const info = await videoFacts(h.id);
   if (!info || !info.channelId) {
     // couldn't read it now; try again on a later request, then leave it to the regular sync
     const n = (tries.get(h.id) || 0) + 1;
