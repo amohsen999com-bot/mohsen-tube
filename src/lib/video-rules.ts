@@ -18,3 +18,10 @@ const MEDIA = new RegExp(
 export function titleAllowed(title: string, group: string): boolean {
   return !!title && !BAD_TITLE.test(title) && (RELIGIOUS.has(group) || !MEDIA.test(title));
 }
+
+/** ISO 8601 duration (PT1H2M3S) to seconds. */
+export function isoSeconds(iso: string): number {
+  const m = /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso || "");
+  if (!m) return 0;
+  return (+(m[1] || 0)) * 86400 + (+(m[2] || 0)) * 3600 + (+(m[3] || 0)) * 60 + (+(m[4] || 0));
+}

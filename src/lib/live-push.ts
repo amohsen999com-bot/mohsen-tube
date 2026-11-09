@@ -9,7 +9,7 @@
  */
 import type { VideoItem } from "./types.ts";
 import { estimateVideoLevel } from "./arabic.ts";
-import { MIN_SECONDS, titleAllowed } from "./video-rules.ts";
+import { MIN_SECONDS, isoSeconds, titleAllowed } from "./video-rules.ts";
 import { getDb } from "./db.ts";
 
 const SB_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, "");
@@ -67,11 +67,6 @@ const dayNum = (ms: number) => {
 
 type Info = { seconds: number; channelId: string; upcoming: boolean; views: number; title: string; publish: string };
 
-/** ISO 8601 duration (PT1H2M3S) to seconds. */
-function isoSeconds(iso: string): number {
-  const m = /^P(?:(d+)D)?T?(?:(d+)H)?(?:(d+)M)?(?:(d+)S)?$/.exec(iso || "");
-  return m ? +(m[1] || 0) * 86400 + +(m[2] || 0) * 3600 + +(m[3] || 0) * 60 + +(m[4] || 0) : 0;
-}
 
 /**
  * Video facts from the official YouTube Data API: one videos.list call (1 quota unit) for up to 50 videos.

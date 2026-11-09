@@ -15,7 +15,7 @@
  */
 import fs from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { MIN_SECONDS, titleAllowed } from "../src/lib/video-rules.ts";
+import { MIN_SECONDS, isoSeconds, titleAllowed } from "../src/lib/video-rules.ts";
 
 const KEY = process.env.YOUTUBE_API_KEY || "";
 const FRESH = "data/fresh.jsonl";
@@ -24,14 +24,7 @@ const SLOT = 10 * 60_000;
 const ROTATE = 48; // 48 دورة × 10 دقايق = كل قناة هادية مرة كل 8 ساعات
 
 // نفس قواعد الموقع (src/lib/video-rules.ts)
-export { titleAllowed };
-
-/** ISO 8601 duration (PT1H2M3S) to seconds. */
-export function isoSeconds(iso: string): number {
-  const m = /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso || "");
-  if (!m) return 0;
-  return (+(m[1] || 0)) * 86400 + (+(m[2] || 0)) * 3600 + (+(m[3] || 0)) * 60 + (+(m[4] || 0));
-}
+export { isoSeconds, titleAllowed };
 
 const dayNum = (ms: number) => {
   const d = new Date(ms);
