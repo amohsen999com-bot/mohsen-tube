@@ -9,6 +9,7 @@
  */
 import type { VideoItem } from "./types.ts";
 import { estimateVideoLevel } from "./arabic.ts";
+import { livePushed, loadLivePush } from "./live-push.ts";
 
 const source = () =>
   process.env.MOHSEN_FRESH_URL ||
@@ -49,6 +50,11 @@ export function parseFresh(text: string): VideoItem[] {
 
 /** Refresh from GitHub if the copy is older than a minute (waits at most ~2.5s, never throws). */
 export async function loadLiveFresh(): Promise<void> {
+  // YouTube's instant alerts (live-push.ts) ride along with every refresh
+  await Promise.all([loadLivePush(), loadFreshFile()]);
+}
+
+async function loadFreshFile(): Promise<void> {
   if (!enabled() || Date.now() - loadedAt < TTL) return;
   inflight ||= (async () => {
     try {
@@ -63,5 +69,10 @@ export async function loadLiveFresh(): Promise<void> {
   await inflight;
 }
 
-export const liveFresh = (): VideoItem[] => list;
-export const liveFreshById = (id: string): VideoItem | undefined => byId.get(id);
+/** New uploads not in the catalog yet: YouTube's instant alerts first, then the synced file. */
+export const liveFresh = (): VideoItem[] => {
+  const pushed = livePushed().filter((v) => !byId.has(v.id));
+  return pushed.length ? [...pushed, ...list] : list;
+};
+export const liveFreshById = (id: string): VideoItem | undefined =>
+  byId.get(id) || livePushed().find((v) => v.id === id);

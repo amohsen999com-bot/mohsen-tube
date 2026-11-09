@@ -35,6 +35,11 @@ jobs:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
         run: node --experimental-strip-types scripts/sync-new.ts
 
+      - name: Renew YouTube instant alerts (daily)
+        if: github.event.schedule == '0 3 * * *'
+        continue-on-error: true
+        run: node --experimental-strip-types scripts/websub-subscribe.ts
+
       - name: Daily full rebuild
         if: github.event.schedule == '0 3 * * *'
         run: date -u +%F > data/last-rebuild.txt

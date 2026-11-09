@@ -15,28 +15,16 @@
  */
 import fs from "node:fs";
 import { DatabaseSync } from "node:sqlite";
+import { MIN_SECONDS, titleAllowed } from "../src/lib/video-rules.ts";
 
 const KEY = process.env.YOUTUBE_API_KEY || "";
 const FRESH = "data/fresh.jsonl";
 const MAX_AGE_DAYS = 14;
-const MIN_SECONDS = 120;
 const SLOT = 10 * 60_000;
 const ROTATE = 48; // 48 دورة × 10 دقايق = كل قناة هادية مرة كل 8 ساعات
 
-// نفس rules.py
-const RELIGIOUS = new Set(["علماء", "أنا السلفي"]);
-const BAD_TITLE = /أغنية|اغنية|اغاني|أغاني|موسيقى|موسيقي|مهرجان|كليب|ريمكس|remix|music|song|#shorts|#short|بنات|البنات|للنساء|نسائية/i;
-const MEDIA = new RegExp(
-  "فيلم|أفلام|افلام|الأفلام|الافلام|مسلسل|مسلسلات|سينما|السينما|سينمائي|نتفليكس|نتفلكس|هوليوود|هوليود|بوليوود|" +
-    "أنمي|انمي|الأنمي|ممثل|ممثلة|الممثلين|تريلر|دراما|ديزني|مارفل|" +
-    "\\bmovies?\\b|(?<!thin )\\bfilms?\\b|\\bcinema\\b|netflix|hollywood|bollywood|\\banime\\b|\\bactor|\\bactress|" +
-    "trailer|disney|marvel|tv series|tv shows?|\\bdrama\\b|box office|\\boscars?\\b",
-  "i"
-);
-
-export function titleAllowed(title: string, group: string): boolean {
-  return !!title && !BAD_TITLE.test(title) && (RELIGIOUS.has(group) || !MEDIA.test(title));
-}
+// نفس قواعد الموقع (src/lib/video-rules.ts)
+export { titleAllowed };
 
 /** ISO 8601 duration (PT1H2M3S) to seconds. */
 export function isoSeconds(iso: string): number {

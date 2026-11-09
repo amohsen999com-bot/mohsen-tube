@@ -464,6 +464,31 @@ describe("Hourly new-video sync rules", () => {
   });
 });
 
+describe("YouTube instant alerts (WebSub)", () => {
+  it("reads a watch page and only accepts the site's channels on the callback", async () => {
+    const { parseWatchPage, siteChannel } = await import("../src/lib/live-push.ts");
+    const html =
+      'x"videoDetails":{"videoId":"abcdefghijk","title":"شرح \\"بايثون\\" للمبتدئين","lengthSeconds":"754",' +
+      '"channelId":"UCqDSDmf32TSff5I34laAqKg","isLiveContent":false,"viewCount":"1200"}y"publishDate":"2026-11-09T10:00:00-07:00"';
+    const info = parseWatchPage(html)!;
+    assert.equal(info.title, 'شرح "بايثون" للمبتدئين');
+    assert.equal(info.seconds, 754);
+    assert.equal(info.channelId, "UCqDSDmf32TSff5I34laAqKg");
+    assert.equal(info.upcoming, false);
+    assert.equal(parseWatchPage("<html>nothing</html>"), null);
+    assert.ok(siteChannel("UCqDSDmf32TSff5I34laAqKg"), "a site channel is known");
+    assert.equal(siteChannel("UCKp44bWWZIiOPShPN_ytShw"), undefined, "a blocked channel is not");
+
+    const { GET } = await import("../src/app/api/websub/route.ts");
+    const verify = (ch: string) =>
+      GET(new Request(`http://x/api/websub?hub.mode=subscribe&hub.challenge=abc123&hub.topic=${encodeURIComponent(`https://www.youtube.com/xml/feeds/videos.xml?channel_id=${ch}`)}`));
+    const yes = await verify("UCqDSDmf32TSff5I34laAqKg");
+    assert.equal(yes.status, 200);
+    assert.equal(await yes.text(), "abc123");
+    assert.equal((await verify("UCKp44bWWZIiOPShPN_ytShw")).status, 404);
+  });
+});
+
 describe("Live new uploads (before the catalog rebuild)", () => {
   it("shows a just-synced video in the fresh pool, by id, on its page and on its channel", async () => {
     const { loadLiveFresh } = await import("../src/lib/live-fresh.ts");
