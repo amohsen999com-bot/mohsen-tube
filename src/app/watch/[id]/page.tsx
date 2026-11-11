@@ -18,6 +18,7 @@ import { AlgoEngine } from "@/lib/client/algo";
 import { pickQuestion, rememberAnswer, type Question } from "@/lib/client/questions";
 import { activeSeries, composeRelated, loadFeedPool, rememberSeries } from "@/lib/client/related";
 import { PageSkeleton } from "@/components/ui/Skeleton";
+import { VerifiedBadge, isVerified } from "@/components/ui/VerifiedBadge";
 
 const DUAS = [
   "جزاك الله خيرًا",
@@ -328,7 +329,7 @@ export default function WatchPage({
             >
               <span className="avatar">{video.c.slice(0, 1)}</span>
               <span>
-                <b>{video.c}</b>
+                <b><span className="nm">{video.c}</span>{isVerified(video.c) && <VerifiedBadge />}</b>
                 <small className="muted">{video.tp}</small>
               </span>
             </Link>

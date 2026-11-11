@@ -10,6 +10,7 @@ import { rememberSeries } from "@/lib/client/related";
 import { formatDuration } from "@/lib/arabic";
 import { PageSkeleton } from "@/components/ui/Skeleton";
 import { Glyph } from "@/components/ui/Glyph";
+import { VerifiedBadge, isVerified } from "@/components/ui/VerifiedBadge";
 
 type Sort = "new" | "best" | "old";
 const SORTS: Array<[Sort, string]> = [
@@ -90,7 +91,7 @@ export default function ChannelPage({ params }: { params: Promise<{ name: string
       <header className="ch-top">
         <span className="ch-avatar">{channelName.slice(0, 1)}</span>
         <div className="ch-info">
-          <h1>{channelName}</h1>
+          <h1>{channelName}{isVerified(channelName) && <VerifiedBadge size="0.8em" />}</h1>
           <p className="muted">
             {channel?.group || "قناة"} • {videos.length} فيديو
             {series.length ? ` • ${series.length} قائمة تشغيل` : ""}

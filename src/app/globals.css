@@ -1830,3 +1830,8 @@ h2.you-h { cursor: default; }
   border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; font-size: 15px; resize: vertical; min-height: 56px; }
 .checkin-text:focus { outline: none; border-color: var(--gold); }
 .checkin-send { margin-top: 10px; }
+
+/* علامة التوثيق جنب اسم القناة */
+.vbadge { flex: none; display: inline-block; vertical-align: -0.1em; margin-inline-start: 5px; filter: drop-shadow(0 0 3px rgba(210, 159, 34, .35)); }
+.owner-link b:has(.vbadge) { display: flex; align-items: center; }
+.owner-link b .nm { overflow: hidden; text-overflow: ellipsis; }
