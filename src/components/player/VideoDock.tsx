@@ -846,7 +846,14 @@ export function VideoDock() {
       document.removeEventListener("touchend", onEnd);
       document.removeEventListener("touchcancel", onEnd);
       cancelAnimationFrame(raf);
-      reset(false);
+      // Just became the floating window: it has already placed itself (before the paint), so leave its position alone
+      if (dockRef.current?.classList.contains("mini")) {
+        const w = page();
+        if (w) {
+          w.style.transition = "";
+          w.style.opacity = "";
+        }
+      } else reset(false);
     };
   }, [isPhone, isMini, isFullscreen, currentVideo, minimize]);
 
@@ -911,6 +918,7 @@ export function VideoDock() {
       const from = el.getBoundingClientRect();
       expandHandoff.from = from;
       expandHandoff.to = null;
+      expandHandoff.live = null;
       let t = lastSlotRef.current;
       if (!t) {
         try {
@@ -933,9 +941,20 @@ export function VideoDock() {
             { transform: "translate3d(" + from.left + "px, " + from.top + "px, 0) scale(" + from.width / t.width + ")" },
             { transform: "translate3d(" + t.left + "px, " + t.top + "px, 0) scale(1)" },
           ],
-          { duration: 380, easing: "cubic-bezier(.22, 1, .36, 1)", fill: "forwards" }
+          { duration: 340, easing: "cubic-bezier(.05, 0, 0, 1)", fill: "forwards" }
         );
         expandHandoff.to = new DOMRect(t.left, t.top, t.width, t.height);
+        // Remember where the growing window really is on screen each frame: if the page lands before the grow
+        // finishes, the last glide continues from there instead of jumping the rest of the way
+        // (until the page lands and clears expandHandoff.to; the class can't be the signal, React re-renders it away)
+        expandHandoff.live = from;
+        const started = performance.now();
+        const track = () => {
+          if (!expandHandoff.to || performance.now() - started > 3000) return;
+          expandHandoff.live = el.getBoundingClientRect();
+          requestAnimationFrame(track);
+        };
+        requestAnimationFrame(track);
       }
     }
     router.push("/watch/" + currentVideo.id);
@@ -948,8 +967,10 @@ export function VideoDock() {
     const spot = boxPosition || lastSlotRef.current;
     if (!from || isMini || !spot || !el) return;
     const grown = expandHandoff.to;
+    const live = expandHandoff.live;
     expandHandoff.from = null;
     expandHandoff.to = null;
+    expandHandoff.live = null;
     const se = document.scrollingElement;
     if (se && se.scrollLeft !== 0) se.scrollLeft = 0;
     // Stop the grow (it was positioning the floating version) and the page's own entrance fade
@@ -969,7 +990,7 @@ export function VideoDock() {
     );
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const to = { left: spot.left - window.scrollX, top: spot.top - window.scrollY, width: spot.width, height: spot.height };
-    const src = grown || from;
+    const src = (grown && live) || grown || from;
     const dx = src.left - to.left;
     const dy = src.top - to.top;
     const sx = src.width / to.width;
@@ -980,7 +1001,7 @@ export function VideoDock() {
         { transformOrigin: "0 0", transform: "translate(" + dx + "px, " + dy + "px) scale(" + sx + ", " + sy + ")", borderRadius: grown ? "14px" : "12px" },
         { transformOrigin: "0 0", transform: "none", borderRadius: "14px" },
       ],
-      { duration: grown ? 260 : 440, easing: "cubic-bezier(.2, .85, .25, 1)" }
+      { duration: grown ? 240 : 340, easing: "cubic-bezier(.05, 0, 0, 1)" }
     );
   }, [isMini, boxPosition]);
 

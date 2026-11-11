@@ -654,10 +654,20 @@ body.scrolled .top { background: rgba(25, 23, 27, .72); backdrop-filter: blur(18
 .search input:focus { box-shadow: 0 0 0 4px rgba(210, 159, 34, .14); background: var(--panel-2); }
 
 /* الانتقال بين الصفحات */
-::view-transition-old(root) { animation: pageOut .28s var(--ease-io) both; }
-::view-transition-new(root) { animation: pageIn .6s var(--ease) both .08s; }
-@keyframes pageOut { to { opacity: 0; transform: scale(.985); filter: blur(4px); } }
-@keyframes pageIn { from { opacity: 0; transform: translateY(18px); filter: blur(6px); } }
+/* فتح فيديو (SheetNav): صفحة الفيديو بتطلع من تحت فوق الصفحة القديمة زي تطبيق يوتيوب.
+   منحنى يوتيوب نفسه (.05, 0, 0, 1)، متقاس من ملفات يوتيوب بأداة الهندسة العكسية. */
+html.vt-sheet::view-transition-old(root) { animation: vtDim .34s cubic-bezier(.4, 0, .2, 1) both; mix-blend-mode: normal; }
+html.vt-sheet::view-transition-new(root) { animation: vtSheetUp .34s cubic-bezier(.05, 0, 0, 1) both; mix-blend-mode: normal;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, .45); }
+html.vt-sheet::view-transition-group(dock) { animation-duration: .34s; animation-timing-function: cubic-bezier(.05, 0, 0, 1); }
+@keyframes vtDim { to { filter: brightness(.45); } }
+@keyframes vtSheetUp { from { transform: translateY(100%); } }
+@media (min-width: 761px) {
+  html.vt-sheet::view-transition-old(root) { animation: vtFadeOut .22s cubic-bezier(.4, 0, 1, 1) both; }
+  html.vt-sheet::view-transition-new(root) { animation: vtRise .3s cubic-bezier(.05, 0, 0, 1) both; box-shadow: none; }
+}
+@keyframes vtFadeOut { to { opacity: 0; } }
+@keyframes vtRise { from { opacity: 0; transform: translateY(40px); } }
 
 /* الكروت: بتظهر واحد ورا التاني وإنت بتنزل */
 .card.rv { opacity: 0; transform: translateY(28px) scale(.98); }
@@ -711,8 +721,9 @@ h2.sec::before { transform-origin: bottom; animation: growUp .9s var(--ease) bot
 
 /* صفحة الفيديو */
 .player { box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .9); }
-.dock:not(.mini) { animation: playerIn .9s var(--ease) both; }
-@keyframes playerIn { from { opacity: 0; transform: scale(.97); } }
+/* المشغّل بيظهر في مكانه على طول زي يوتيوب (متقاس: من غير تكبير)، بس بظهور سريع بدل ما يقطع */
+.dock:not(.mini) { animation: playerIn .18s cubic-bezier(0, 0, .2, 1) both; }
+@keyframes playerIn { from { opacity: 0; } }
 .watch h1, .owner-row, .desc, .series { animation: fadeUp .9s var(--ease) both; }
 .watch h1 { animation-delay: .12s; }
 .owner-row { animation-delay: .2s; }
@@ -1835,3 +1846,18 @@ h2.you-h { cursor: default; }
 .vbadge { flex: none; display: inline-block; vertical-align: -0.1em; margin-inline-start: 5px; filter: drop-shadow(0 0 3px rgba(210, 159, 34, .35)); }
 .owner-link b:has(.vbadge) { display: flex; align-items: center; }
 .owner-link b .nm { overflow: hidden; text-overflow: ellipsis; }
+
+/* شاشة فتح التطبيق (Splash) */
+.nt-splash { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: var(--bg);
+  animation: spAuto .4s ease 4s forwards; }
+.nt-splash .sp-in { display: flex; flex-direction: column; align-items: center; gap: 16px; animation: spLogoIn .55s cubic-bezier(.05, 0, 0, 1) both .05s; }
+.nt-splash .sp-mark { width: 88px; height: 88px; filter: drop-shadow(0 12px 32px rgba(122, 10, 38, .6)); }
+.nt-splash .sp-name { font-family: "Cairo", "Noto Sans Arabic", sans-serif; font-weight: 800; font-size: 26px; color: var(--text); letter-spacing: .2px; }
+.nt-splash .sp-name b:last-child { color: var(--gold); }
+.nt-splash.out { pointer-events: none; animation: spOut .4s cubic-bezier(.4, 0, 1, 1) forwards; }
+.nt-splash.out .sp-in { animation: spLogoOut .4s cubic-bezier(.4, 0, 1, 1) forwards; }
+@keyframes spLogoIn { from { opacity: 0; transform: scale(.84); } }
+@keyframes spLogoOut { to { opacity: 0; transform: scale(1.1); } }
+@keyframes spOut { to { opacity: 0; visibility: hidden; } }
+@keyframes spAuto { to { opacity: 0; visibility: hidden; pointer-events: none; } }
+@media (prefers-reduced-motion: reduce) { .nt-splash, .nt-splash .sp-in { animation-duration: .01s; } }

@@ -4,6 +4,8 @@ import { PlayerProvider } from "@/components/player/PlayerContext";
 import { Header } from "@/components/layout/Header";
 import { VideoDock } from "@/components/player/VideoDock";
 import { SignInGate } from "@/components/modals/SignInGate";
+import { SheetNav } from "@/components/layout/SheetNav";
+import { Splash } from "@/components/layout/Splash";
 
 const SITE = "https://mohsen-tube.vercel.app";
 
@@ -87,7 +89,9 @@ export default function RootLayout({
             <VideoDock />
           </div>
           <SignInGate />
+          <SheetNav />
         </PlayerProvider>
+        <Splash />
       </body>
     </html>
   );

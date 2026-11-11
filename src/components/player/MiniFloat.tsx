@@ -9,7 +9,7 @@
  * - وهو واقف: صورة الفيديو بدل شاشة يوتيوب (زرار التشغيل الكبير واللوجو).
  * - لما ييجي من صفحة الفيديو (سحب لتحت) بيصغر من مكانه لحد الركن (FLIP).
  */
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { Glyph } from "@/components/ui/Glyph";
 
 type Corner = "tl" | "tr" | "bl" | "br";
@@ -20,7 +20,7 @@ const SPRING = "transform 480ms cubic-bezier(.18,.89,.32,1.12)";
 /** Where the floating window was when it came from the watch page (set by the swipe-down). */
 export const miniHandoff: { from: DOMRect | null } = { from: null };
 /** Where the floating window was when it was tapped open (the watch page grows the video from there). */
-export const expandHandoff: { from: DOMRect | null; to: DOMRect | null } = { from: null, to: null };
+export const expandHandoff: { from: DOMRect | null; to: DOMRect | null; live: DOMRect | null } = { from: null, to: null, live: null };
 
 function readCorner(): Corner {
   try {
@@ -67,8 +67,9 @@ export function MiniFloat({
     el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
   }, [dockRef]);
 
-  // Arrive: from the watch page's video (shrinks into the corner), or just slide into the saved corner
-  useEffect(() => {
+  // Arrive: from the watch page's video (shrinks into the corner), or just slide into the saved corner.
+  // (Before the first paint, or the window shows in its corner for one frame before shrinking there.)
+  useLayoutEffect(() => {
     const el = dockRef.current;
     if (!el) return;
     corner.current = readCorner();
@@ -77,6 +78,9 @@ export function MiniFloat({
     const p = cornerPoint(corner.current, w, h);
     const from = miniHandoff.from;
     miniHandoff.from = null;
+    // (the slide-in's second step: cancelled if the window closes first, or it would put the floating
+    // window's position back on the page player, off its spot)
+    let arriveFrame = 0;
     el.style.willChange = "transform";
     el.style.width = "";
     el.style.animation = ""; // (the watch page turned its entrance fade off when it grew from here)
@@ -88,12 +92,12 @@ export function MiniFloat({
           { transform: `translate3d(${from.left}px, ${from.top}px, 0) scale(${from.width / w})`, borderRadius: "0px" },
           { transform: `translate3d(${p.x}px, ${p.y}px, 0) scale(1)`, borderRadius: "12px" },
         ],
-        { duration: 420, easing: "cubic-bezier(.2,.8,.2,1)" }
+        { duration: 340, easing: "cubic-bezier(.05, 0, 0, 1)" } // (YouTube's own curve, measured)
       );
     } else {
       apply(p.x, p.y + 40, null);
       el.style.opacity = "0";
-      requestAnimationFrame(() => {
+      arriveFrame = requestAnimationFrame(() => {
         el.style.opacity = "1";
         apply(p.x, p.y, `${SPRING}, opacity .25s ease`);
       });
@@ -108,6 +112,7 @@ export function MiniFloat({
       window.removeEventListener("resize", onResize);
       window.visualViewport?.removeEventListener("resize", onResize);
       cancelAnimationFrame(frame.current);
+      cancelAnimationFrame(arriveFrame);
       // Hand the element back clean (the watch page positions it again)
       el.style.transform = "";
       el.style.transition = "";
