@@ -918,7 +918,10 @@ export function VideoDock() {
         } catch {}
         if (t) lastSlotRef.current = t;
       }
-      if (t && from.width > 0 && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      // Computers: no early grow. While the watch page is still loading, the grown player would stand big over the
+      // page you're on (and stay stuck there if it never lands); the small window waits in its corner instead and
+      // glides up once the page is there (the landing glide below starts from expandHandoff.from).
+      if (isPhone && t && from.width > 0 && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         // The page will open at the top, so the slot's page position is where it lands on screen.
         // The player takes its final size right away (shown scaled down so it still looks like the small
         // window) and grows back to scale 1: YouTube never has to redraw at a new size at the end, so no glitch.
@@ -936,7 +939,7 @@ export function VideoDock() {
       }
     }
     router.push("/watch/" + currentVideo.id);
-  }, [currentVideo, router]);
+  }, [currentVideo, router, isPhone]);
 
   useLayoutEffect(() => {
     const from = expandHandoff.from;
