@@ -7,7 +7,7 @@ import { SignInGate } from "@/components/modals/SignInGate";
 import { SheetNav } from "@/components/layout/SheetNav";
 import { Splash } from "@/components/layout/Splash";
 
-const SITE = "https://mohsen-tube.vercel.app";
+import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
