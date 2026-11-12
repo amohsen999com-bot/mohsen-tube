@@ -1,19 +1,26 @@
-# Render Blueprint: free web service for محسن تيوب.
-# The SQLite catalog (data/mohsen.db, ~115 MB) is too big for git, so it's committed gzipped
-# (data/mohsen.db.gz, ~23 MB) and unpacked during the build.
+# محسن تيوب على Render (الخطة المجانية).
+# - Render بيبني الـDockerfile مع كل تحديث للكود على main.
+# - التحديث اللي كل 10 دقايق (data/fresh.jsonl) ما بيعملش بناء جديد: الموقع بيقراه من GitHub على طول،
+#   فدقايق البناء المجانية (500 في الشهر) ما بتخلصش. البناء الكامل بيحصل مرة في اليوم (data/last-rebuild.txt).
+# - Render ما بيحتفظش بنسخ قديمة متراكمة على حسابك، فمفيش مشكلة تخزين.
 services:
   - type: web
     name: mohsen-tube
-    runtime: node
+    runtime: docker
     plan: free
     region: frankfurt
-    buildCommand: gunzip -c data/mohsen.db.gz > data/mohsen.db && npm ci && npm run build
-    startCommand: npx next start --port $PORT
-    healthCheckPath: /
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /robots.txt
+    autoDeploy: true
+    buildFilter:
+      ignoredPaths:
+        - data/fresh.jsonl
+        - "**/*.md"
     envVars:
-      - key: NODE_VERSION
-        value: "24"
-      - key: NEXT_PUBLIC_SUPABASE_URL
-        value: https://psrqpjzovpnrrsaulahc.supabase.co
-      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-        value: sb_publishable_4aHNMaBF1FNmBfVq6HhtsQ_2dD9a_bx
+      - key: NEXT_PUBLIC_SITE_URL
+        value: https://mohsen-tube.onrender.com
+      - key: MOHSEN_LIVE_FRESH
+        value: "on"
+      - key: YOUTUBE_API_KEY
+        sync: false

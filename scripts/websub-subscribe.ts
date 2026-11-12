@@ -8,7 +8,7 @@
 import { DatabaseSync } from "node:sqlite";
 
 const HUB = "https://pubsubhubbub.appspot.com/subscribe";
-const CALLBACK = process.env.MOHSEN_WEBSUB_CALLBACK || "https://mohsen-tube.vercel.app/api/websub";
+const CALLBACK = process.env.MOHSEN_WEBSUB_CALLBACK || "https://mohsen-tube.onrender.com/api/websub";
 const LEASE = 10 * 24 * 3600;
 
 const db = new DatabaseSync("data/mohsen.db");

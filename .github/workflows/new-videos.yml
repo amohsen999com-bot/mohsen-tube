@@ -27,6 +27,12 @@ jobs:
         with:
           node-version: 22
 
+      # The free Render plan sleeps after 15 minutes without visits (the next visitor waits ~1 minute).
+      # This run comes every 10 minutes, so a light visit keeps the site awake (fits the free 750 hours a month).
+      - name: Keep the site awake
+        continue-on-error: true
+        run: curl -s -o /dev/null -m 90 -w "site %{http_code} in %{time_total}s\n" "https://mohsen-tube.onrender.com/robots.txt" || true
+
       - name: Open the catalog
         run: gunzip -c data/mohsen.db.gz > data/mohsen.db
 
