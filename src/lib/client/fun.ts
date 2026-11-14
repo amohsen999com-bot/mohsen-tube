@@ -98,7 +98,11 @@ function freshness(v: VideoItem): number {
   return Math.max(0, Math.min(1, (y - 2018) / 8));
 }
 
-/** One seed per visit: a new mix each time you open ترفيه, the same mix if you come back within 20 minutes. */
+/**
+ * One seed per visit: a new mix each time you open ترفيه, the same mix if you come back within 20 minutes.
+ * The mix is one of 20 shared ones (picked at random), so the server can cache each mix instead of building
+ * a brand-new one for every visit.
+ */
 export function funVisitSeed(now = Date.now()): string {
   try {
     const raw = window.sessionStorage.getItem("nt_fun_seed");
@@ -106,7 +110,7 @@ export function funVisitSeed(now = Date.now()): string {
       const [seed, at] = raw.split("|");
       if (now - Number(at) < 20 * 60_000) return seed;
     }
-    const seed = Math.random().toString(36).slice(2, 10);
+    const seed = "m" + Math.floor(Math.random() * 20);
     window.sessionStorage.setItem("nt_fun_seed", seed + "|" + now);
     return seed;
   } catch {

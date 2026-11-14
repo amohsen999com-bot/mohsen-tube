@@ -14,9 +14,11 @@ COPY package.json package-lock.json ./
 RUN npm ci --include=dev --no-audit --no-fund
 
 COPY . .
-# Open the catalog, add the videos that came in since the last full rebuild, then build
+# Open the catalog, add the videos that came in since the last full rebuild, prebuild the heavy shared
+# results (scripts/build-precompute.ts), then build
 RUN gunzip -c data/mohsen.db.gz > data/mohsen.db && rm data/mohsen.db.gz \
  && node --experimental-strip-types scripts/import-channels.ts data/fresh.jsonl \
+ && node --experimental-strip-types scripts/build-precompute.ts \
  && npx next build \
  && chown -R node:node /app
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchSuggestions, searchVideos } from "@/lib/db";
+import { cachedJson } from "@/lib/http-cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
 
     // Autocomplete: short completions (YouTube-style), not video titles
     if (sp.get("complete") === "1") {
-      return NextResponse.json({ suggestions: searchSuggestions(sp.get("q") || "") });
+      return cachedJson({ suggestions: searchSuggestions(sp.get("q") || "") }, 86400);
     }
 
     const durParam = sp.get("dur") || "";
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
       suggestOnly,
     });
 
-    return NextResponse.json({ results });
+    return cachedJson({ results }, 3600);
   } catch (err) {
     console.error("GET /api/search error:", err);
     return NextResponse.json(

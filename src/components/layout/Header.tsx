@@ -23,6 +23,9 @@ const RECENT_KEY = "nt_recent_searches";
 const CLOCK_PATH = "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7z";
 const LENS_PATH = "M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z";
 
+/** Suggestions already fetched in this visit (typing back and forth doesn't ask the server again). */
+const suggestMemo = new Map<string, string[]>();
+
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
@@ -148,14 +151,22 @@ export function Header() {
       setSuggestions([]);
       return;
     }
+    const known = suggestMemo.get(query);
+    if (known) {
+      setSuggestions(known);
+      return;
+    }
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&complete=1`);
         if (!res.ok) return;
         const data = await res.json();
-        setSuggestions(data.suggestions || []);
+        const list: string[] = data.suggestions || [];
+        if (suggestMemo.size > 300) suggestMemo.clear();
+        suggestMemo.set(query, list);
+        setSuggestions(list);
       } catch {}
-    }, 150);
+    }, 300);
     return () => clearTimeout(timer);
   }, [query]);
 

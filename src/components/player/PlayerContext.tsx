@@ -15,6 +15,33 @@ import { startSync } from "@/lib/client/sync";
 
 export type SleepOption = 15 | 30 | 60 | "end" | null;
 
+type RoomPoll = { vid?: string; t: number; playing: boolean; by?: string; ts: number; now: number; error?: string };
+const SB_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, "");
+const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
+
+/**
+ * The room's current state. Asked straight from Supabase (the same public read our server used to make for
+ * every poll), so a room open for an hour no longer runs our server ~2,400 times. Falls back to /api/room.
+ */
+async function pollRoom(code: string): Promise<RoomPoll | null> {
+  const clean = code.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
+  if (SB_URL && SB_KEY && clean) {
+    try {
+      const res = await fetch(`${SB_URL}/rest/v1/rpc/room_get`, {
+        method: "POST",
+        headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ p_code: clean }),
+      });
+      if (res.ok) {
+        const r = (await res.json()) as RoomPoll | null;
+        return r && typeof r === "object" && "ts" in r ? r : null;
+      }
+    } catch {}
+  }
+  const res = await fetch(`/api/room?code=${encodeURIComponent(code)}`);
+  return res.ok ? ((await res.json()) as RoomPoll) : null;
+}
+
 interface PlayerContextValue {
   currentVideo: VideoItem | null;
   /** Where the current video should start (from ?s=, a clip, or resume); null = resume from saved progress. */
@@ -366,11 +393,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (!roomCode) return;
     const id = setInterval(async () => {
       try {
-        const res = await fetch(
-          `/api/room?code=${encodeURIComponent(roomCode)}`
-        );
-        if (!res.ok) return;
-        const r = await res.json();
+        const r = await pollRoom(roomCode);
+        if (!r) return;
         if (
           r.error ||
           r.ts <= lastRoomTsRef.current ||

@@ -9,6 +9,7 @@ import {
   getVideosByIds,
 } from "@/lib/db";
 import { loadLiveFresh } from "@/lib/live-fresh";
+import { cachedJson } from "@/lib/http-cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
     if (sp.get("summary") === "1") {
       const summary = getCatalogSummary();
       const labels = await getAggregatedLabels();
-      return NextResponse.json({ ...summary, labels });
+      return cachedJson({ ...summary, labels }, 600);
     }
 
     // "Watched together" graph for the viewer's recent history (client-side relatedScores)
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
       if (!allowRequest("related", clientIp(request), 30)) {
         return NextResponse.json({ error: "rate limited" }, { status: 429 });
       }
-      return NextResponse.json({ graph: getRelatedGraph(relatedFor.split(",").map((s) => s.trim()).filter(Boolean)) });
+      return cachedJson({ graph: getRelatedGraph(relatedFor.split(",").map((s) => s.trim()).filter(Boolean)) }, 3600);
     }
 
     const idsParam = sp.get("ids");
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
         .map((s) => s.trim())
         .filter(Boolean);
       const videos = getVideosByIds(ids);
-      return NextResponse.json({ videos });
+      return cachedJson({ videos }, 600);
     }
 
     const channelsParam = sp.get("channels");
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
         .filter(Boolean);
       const limit = Math.min(Math.max(Number(sp.get("limit")) || 200, 1), 500);
       const videos = getVideosByChannels(channelNames, limit);
-      return NextResponse.json({ videos });
+      return cachedJson({ videos }, 600);
     }
 
     const category = sp.get("category") === "fun" ? "fun" : "all";
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
     const offset = Math.max(Number(sp.get("offset")) || 0, 0);
 
     const data = getFeedVideos({ category, topic, limit, offset, interests, seed: (sp.get("seed") || "").slice(0, 40), school: sp.get("school") === "1" });
-    return NextResponse.json(data);
+    return cachedJson(data, 300);
   } catch (err) {
     console.error("GET /api/videos error:", err);
     return NextResponse.json(

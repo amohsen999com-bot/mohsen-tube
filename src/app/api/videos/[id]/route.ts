@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getVideoDetail } from "@/lib/db";
 import { loadLiveFresh } from "@/lib/live-fresh";
+import { cachedJson } from "@/lib/http-cache";
 
 export async function GET(
   request: NextRequest,
@@ -15,7 +16,7 @@ export async function GET(
     if (!detail) {
       return NextResponse.json({ error: "Video not found" }, { status: 404 });
     }
-    return NextResponse.json(detail);
+    return cachedJson(detail, 3600);
   } catch (err) {
     console.error("GET /api/videos/[id] error:", err);
     return NextResponse.json(

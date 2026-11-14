@@ -23,6 +23,24 @@ import {
 
 let _db: DatabaseSync | null = null;
 let _vocabCache: string[] | null = null;
+let _vocabSet: Set<string> | null = null;
+
+/**
+ * In production with Supabase set, the site never writes to SQLite (rooms, labels and feedback live in
+ * Supabase), so the catalog is opened read-only straight from the deployed file: no 257 MB copy to /tmp
+ * on every new server instance. MOHSEN_DB_READONLY=1/0 forces it either way.
+ */
+function useReadOnly(): boolean {
+  const f = process.env.MOHSEN_DB_READONLY;
+  if (f === "1") return true;
+  if (f === "0") return false;
+  return (
+    process.env.NODE_ENV === "production" &&
+    !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY &&
+    process.env.MOHSEN_SHARED_STORE !== "sqlite"
+  );
+}
 
 export function getDb(): DatabaseSync {
   if (_db) return _db;
@@ -33,7 +51,11 @@ export function getDb(): DatabaseSync {
       `Database file not found at ${dbPath}. Run "npm run seed" first.`
     );
   }
-  // Serverless hosts (Vercel) ship the bundle read-only; SQLite needs a writable file (WAL, rooms, labels),
+  if (useReadOnly()) {
+    _db = new DatabaseSync(dbPath, { readOnly: true });
+    return _db;
+  }
+  // Writable mode on a serverless host (no Supabase): SQLite needs a writable file (rooms, labels),
   // so each instance works on its own copy in /tmp. Those writes are per-instance and short-lived.
   if (process.env.VERCEL) {
     const tmp = path.join(os.tmpdir(), "mohsen.db");
@@ -60,6 +82,90 @@ function ensureSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS labels_vote_idx ON labels (vid, ch, q, voter);
     CREATE TABLE IF NOT EXISTS related (vid TEXT PRIMARY KEY, ids_json TEXT NOT NULL);
   `);
+  ensureSpeedIndexes(db);
+}
+
+/** Indexes that let the heavy lookups read only what they return (also created by the build step). */
+export function ensureSpeedIndexes(db: DatabaseSync): void {
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_rel_c ON videos (c, COALESCE(s, r)) WHERE is_curated = 1;
+    CREATE INDEX IF NOT EXISTS idx_rel_tp ON videos (tp, COALESCE(s, r)) WHERE is_curated = 1;
+    CREATE INDEX IF NOT EXISTS idx_videos_dt ON videos (dt) WHERE is_curated = 1;
+  `);
+}
+
+/*
+ * Prebuilt results: the slow, same-for-everyone results (they only change when the catalog changes) are
+ * computed once at build time by the same functions below (scripts/build-precompute.ts) and stored in the
+ * database, so a new server instance reads them instead of scanning 157k videos. A fingerprint of the
+ * catalog guards against stale rows: if it doesn't match, everything is computed live as before.
+ */
+let _prebuiltOk: boolean | null = null;
+let _prebuildWrite = false;
+
+function catalogFingerprint(db: DatabaseSync): string {
+  const r = db.prepare(`SELECT COUNT(*) AS n, MAX(rowid) AS m FROM videos WHERE is_curated = 1`).get() as { n: number; m: number };
+  const ch = db.prepare(`SELECT COUNT(*) AS n FROM channels`).get() as { n: number };
+  return `${r.n}:${r.m}:${ch.n}`;
+}
+
+function prebuiltAvailable(db: DatabaseSync): boolean {
+  if (_prebuiltOk !== null) return _prebuiltOk;
+  try {
+    const row = db.prepare(`SELECT json FROM prebuilt WHERE key = 'fingerprint'`).get() as { json: string } | undefined;
+    _prebuiltOk = !!row && JSON.parse(row.json) === catalogFingerprint(db);
+  } catch {
+    _prebuiltOk = false;
+  }
+  return _prebuiltOk;
+}
+
+function prebuilt<T>(key: string, compute: () => T): T {
+  const db = getDb();
+  if (!_prebuildWrite && prebuiltAvailable(db)) {
+    const row = db.prepare(`SELECT json FROM prebuilt WHERE key = ?`).get(key) as { json: string } | undefined;
+    if (row) return JSON.parse(row.json) as T;
+  }
+  const value = compute();
+  if (_prebuildWrite) db.prepare(`INSERT OR REPLACE INTO prebuilt (key, json) VALUES (?, ?)`).run(key, JSON.stringify(value));
+  return value;
+}
+
+/** Build step: compute and store every prebuilt result (the database must be writable). */
+export function writePrebuilt(): string[] {
+  const db = getDb();
+  db.exec(`CREATE TABLE IF NOT EXISTS prebuilt (key TEXT PRIMARY KEY, json TEXT NOT NULL); DELETE FROM prebuilt;`);
+  ensureSpeedIndexes(db);
+  _prebuildWrite = true;
+  schoolChannels = null;
+  _vocabCache = null;
+  _vocabSet = null;
+  balancedCache = null;
+  funCandidates = null;
+  _curatedCount = null;
+  _summaryCache = null;
+  try {
+    getSchoolChannels();
+    getVocabulary(db);
+    getBalancedPool();
+    funBuckets();
+    curatedCount();
+    getCatalogSummary();
+  } finally {
+    _prebuildWrite = false;
+  }
+  db.prepare(`INSERT OR REPLACE INTO prebuilt (key, json) VALUES ('fingerprint', ?)`).run(JSON.stringify(catalogFingerprint(db)));
+  _prebuiltOk = null;
+  return (db.prepare(`SELECT key FROM prebuilt`).all() as Array<{ key: string }>).map((r) => r.key);
+}
+
+let _curatedCount: number | null = null;
+function curatedCount(): number {
+  if (_curatedCount === null)
+    _curatedCount = prebuilt("curatedCount", () =>
+      (getDb().prepare(`SELECT COUNT(*) as cnt FROM videos WHERE is_curated = 1`).get() as { cnt: number }).cnt
+    );
+  return _curatedCount;
 }
 
 interface RawVideoRow {
@@ -104,7 +210,19 @@ function mapRowToVideo(row: RawVideoRow): VideoItem {
 const VIDEO_COLS =
   "id, t, c, d, tp, g, r, s, q, o, lv, hd, dt, y, pl";
 
-export function getCatalogSummary() {
+type CatalogSummary = {
+  topics: Array<{ tp: string; g: string; count: number }>;
+  channels: Array<{ name: string; id: string; group: string; field?: string; priority: boolean }>;
+};
+let _summaryCache: CatalogSummary | null = null;
+
+/** Topic counts and the channel list: the same until the catalog changes, so built once. */
+export function getCatalogSummary(): CatalogSummary {
+  if (!_summaryCache) _summaryCache = prebuilt("summary", computeCatalogSummary);
+  return _summaryCache;
+}
+
+function computeCatalogSummary(): CatalogSummary {
   const db = getDb();
   const topics = db
     .prepare(
@@ -158,6 +276,11 @@ let freshCache: { at: number; list: VideoItem[] } | null = null;
 
 function getBalancedPool(): VideoItem[] {
   if (balancedCache) return balancedCache;
+  balancedCache = prebuilt("balancedPool", computeBalancedPool);
+  return balancedCache;
+}
+
+function computeBalancedPool(): VideoItem[] {
   const db = getDb();
   const list: VideoItem[] = [];
   for (const [where, n] of POOL_SHARE) {
@@ -175,7 +298,6 @@ function getBalancedPool(): VideoItem[] {
       .all(FEED_CHANNEL_CAP, n) as unknown as RawVideoRow[];
     list.push(...rows.map(mapRowToVideo));
   }
-  balancedCache = list;
   return list;
 }
 
@@ -251,6 +373,11 @@ let schoolChannels: Set<string> | null = null;
 
 function getSchoolChannels(): Set<string> {
   if (schoolChannels) return schoolChannels;
+  schoolChannels = new Set(prebuilt("schoolChannels", () => [...computeSchoolChannels()]));
+  return schoolChannels;
+}
+
+function computeSchoolChannels(): Set<string> {
   const rows = getDb().prepare(`SELECT c, t FROM videos WHERE is_curated = 1`).all() as Array<{ c: string; t: string }>;
   const tot = new Map<string, number>();
   const hit = new Map<string, number>();
@@ -258,8 +385,7 @@ function getSchoolChannels(): Set<string> {
     tot.set(r.c, (tot.get(r.c) || 0) + 1);
     if (SCHOOL_RE.test(r.t)) hit.set(r.c, (hit.get(r.c) || 0) + 1);
   }
-  schoolChannels = new Set([...hit].filter(([c, n]) => n >= 8 && n / (tot.get(c) || 1) >= 0.25).map(([c]) => c));
-  return schoolChannels;
+  return new Set([...hit].filter(([c, n]) => n >= 8 && n / (tot.get(c) || 1) >= 0.25).map(([c]) => c));
 }
 
 export function isSchoolVideo(v: { t: string; c: string }): boolean {
@@ -312,9 +438,7 @@ export function getFeedVideos(options: {
     return { videos: list, total: totalRow.cnt };
   }
 
-  const totalRow = db
-    .prepare(`SELECT COUNT(*) as cnt FROM videos WHERE is_curated = 1`)
-    .get() as { cnt: number };
+  const totalRow = { cnt: curatedCount() };
 
   // Home pool = what just came out + plenty of what this viewer picked + a fixed share of each kind.
   // (It used to be the top 1200 by score: 62% sheikhs, and only 18 programming videos for someone who picked it.)
@@ -357,8 +481,13 @@ let funCandidates: Array<{ where: string; take: number; list: VideoItem[] }> | n
 
 function funBuckets() {
   if (funCandidates) return funCandidates;
+  funCandidates = prebuilt("funBuckets", computeFunBuckets);
+  return funCandidates;
+}
+
+function computeFunBuckets(): Array<{ where: string; take: number; list: VideoItem[] }> {
   const db = getDb();
-  funCandidates = FUN_BUCKETS.map((b) => ({
+  return FUN_BUCKETS.map((b) => ({
     where: b.where,
     take: b.take,
     list: (
@@ -376,7 +505,6 @@ function funBuckets() {
         .all(b.perChannel, b.pool) as unknown as RawVideoRow[]
     ).map(mapRowToVideo),
   }));
-  return funCandidates;
 }
 
 /** Small seeded random generator (mulberry32) so one visit's draw is repeatable. */
@@ -477,15 +605,27 @@ export function getVideosByChannels(channelNames: string[], limit = 200): VideoI
 /** Content-based related videos (same channel/topic + title-word overlap), via indexed lookups. */
 function computeRelated(video: VideoItem, limit: number): VideoItem[] {
   const db = getDb();
-  const relatedCandidates = db
-    .prepare(
-      `SELECT ${VIDEO_COLS}
-       FROM videos
-       WHERE is_curated = 1 AND id != ? AND (c = ? OR tp = ?)
-       ORDER BY (CASE WHEN c = ? THEN 1.5 ELSE 0 END + CASE WHEN tp = ? THEN 1.2 ELSE 0 END + COALESCE(s, r)) DESC
-       LIMIT 60`
-    )
-    .all(video.id, video.c, video.tp, video.c, video.tp) as unknown as RawVideoRow[];
+  // Same 60 candidates as "same channel or same topic, ranked by match + score", but read through the
+  // idx_rel_c / idx_rel_tp indexes (best-first) instead of sorting the whole topic on every call.
+  const pick = (where: string, ...args: (string | number)[]) =>
+    db
+      .prepare(
+        `SELECT ${VIDEO_COLS}, COALESCE(s, r) AS rel_s FROM videos
+         WHERE is_curated = 1 AND id != ? AND ${where}
+         ORDER BY COALESCE(s, r) DESC LIMIT 90`
+      )
+      .all(video.id, ...args) as unknown as Array<RawVideoRow & { rel_s: number }>;
+  const seenCand = new Set<string>();
+  const relatedCandidates = [
+    ...pick(`c = ? AND tp = ?`, video.c, video.tp),
+    ...pick(`c = ?`, video.c),
+    ...(video.tp ? pick(`tp = ?`, video.tp) : []),
+  ]
+    .filter((row) => !seenCand.has(row.id) && !!seenCand.add(row.id))
+    .map((row) => ({ row, key: (row.c === video.c ? 1.5 : 0) + (video.tp && row.tp === video.tp ? 1.2 : 0) + (row.rel_s ?? 0) }))
+    .sort((a, b) => b.key - a.key)
+    .slice(0, 60)
+    .map((x) => x.row);
   const titleWords = new Set(
     normArabic(video.t)
       .split(/\s+/)
@@ -622,6 +762,17 @@ export function getVideoDetail(videoId: string, preferredSeries?: number): Video
 
 function getVocabulary(db: DatabaseSync): string[] {
   if (_vocabCache) return _vocabCache;
+  _vocabCache = prebuilt("vocabulary", () => computeVocabulary(db));
+  _vocabSet = new Set(_vocabCache);
+  return _vocabCache;
+}
+
+function vocabHas(db: DatabaseSync, w: string): boolean {
+  if (!_vocabSet) getVocabulary(db);
+  return _vocabSet!.has(w);
+}
+
+function computeVocabulary(db: DatabaseSync): string[] {
   const rows = db
     .prepare(`SELECT t, c FROM videos WHERE is_curated = 1`)
     .all() as Array<{ t: string; c: string }>;
@@ -633,8 +784,7 @@ function getVocabulary(db: DatabaseSync): string[] {
       if (s.length >= 3) set.add(s);
     }
   }
-  _vocabCache = [...set];
-  return _vocabCache;
+  return [...set];
 }
 
 export function searchVideos(
@@ -672,7 +822,7 @@ export function searchVideos(
     for (const syn of getSynonyms(raw)) variants.add(syn);
 
     // Check if raw or stem exists as an exact token in vocab; if not, check 1-edit typo in vocab
-    const hasExact = vocab.includes(raw) || vocab.includes(t);
+    const hasExact = vocabHas(db, raw) || vocabHas(db, t);
     if (!hasExact && (raw.length >= 4 || t.length >= 3)) {
       let typoMatches = 0;
       for (const v of vocab) {
